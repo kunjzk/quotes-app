@@ -1,0 +1,9 @@
+{% if quotes%} {% for quote in quotes %}
+<ul>
+  <li>
+    <a href="{% url 'quote_detail' quote.id %}">{{quote.text}}</a>
+  </li>
+</ul>
+{% endfor %} {% else %}
+<p>No quotes found</p>
+{% endif %}

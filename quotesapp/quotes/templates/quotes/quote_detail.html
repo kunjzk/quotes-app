@@ -1,0 +1,9 @@
+<h1>{{quote.quote}}</h1>
+<h2>Book details</h2>
+<p>{{quote.book.title}}</p>
+<p>{{quote.book.author}}</p>
+<p>{{quote.page_number}}</p>
+<h2>Quote details</h2>
+<p>{{quote.created_at}}</p>
+<p>{{quote.updated_at}}</p>
+<a href="{% url 'quotes_list' %}">Back to quotes list</a>

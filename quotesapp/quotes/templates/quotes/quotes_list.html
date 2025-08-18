@@ -1,7 +1,7 @@
 {% if quotes%} {% for quote in quotes %}
 <ul>
   <li>
-    <a href="{% url 'quote_detail' quote.id %}">{{quote.text}}</a>
+    <a href="{% url 'quotes:quote_detail' quote.id %}">{{quote.quote}}</a>
   </li>
 </ul>
 {% endfor %} {% else %}

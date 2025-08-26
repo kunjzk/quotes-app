@@ -6,4 +6,5 @@
 <h2>Quote details</h2>
 <p>{{quote.created_at}}</p>
 <p>{{quote.updated_at}}</p>
+<a href="{% url 'quotes:quote_edit' quote.pk %}">Edit Quote</a> |
 <a href="{% url 'quotes:quotes_list' %}">Back to quotes list</a>

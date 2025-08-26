@@ -1,6 +1,6 @@
 from django.http import HttpResponse
 from django.shortcuts import render
-from django.views.generic import ListView, DetailView, CreateView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from .models import Quotes, Books
 from django import forms
 from django.db import transaction
@@ -68,6 +68,32 @@ class QuoteCreateViewCustomForm(CreateView):
 
         print(f"book: {book}, title: {title}, author: {author}, page_number: {page_number}, quote: {quote}")
         return super().form_valid(form)
+
+class QuoteUpdateView(UpdateView):
+    model = Quotes
+    template_name = 'quotes/quote_edit.html'
+    form_class = QuoteCreateForm
+    success_url = reverse_lazy('quotes:quotes_list')
     
+    def get_initial(self):
+        """Pre-populate form with current book's title and author"""
+        initial = super().get_initial()
+        if self.object.book:
+            initial['title'] = self.object.book.title
+            initial['author'] = self.object.book.author
+        return initial
+    
+    @transaction.atomic
+    def form_valid(self, form):
+        book = form.cleaned_data['book']
+        title = form.cleaned_data['title']
+        author = form.cleaned_data['author']
+        
+        if not book and title and author:
+            # Create new book if none selected but title/author provided
+            book = Books.objects.create(title=title, author=author)
+            form.instance.book = book
+        
+        return super().form_valid(form)
 
 

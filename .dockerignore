@@ -1,1 +1,3 @@
 venv/
+quotesapp/db.sqlite3
+*.tar

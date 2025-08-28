@@ -13,4 +13,6 @@ COPY . .
 
 WORKDIR /app/quotesapp
 
+RUN python manage.py makemigrations && python manage.py migrate
+
 CMD ["gunicorn", "quotesapp.wsgi:application", "--bind", "0.0.0.0:8000"]

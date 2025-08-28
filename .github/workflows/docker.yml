@@ -3,6 +3,8 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -15,16 +17,64 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to GitHub Container Registry
+      - name: Install skopeo
         run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          sudo apt-get update
+          sudo apt-get install -y skopeo
 
       - name: Build Docker image
         run: |
-          docker build -t ghcr.io/${{ github.repository_owner }}/quotes-app:latest .
-          docker build -t ghcr.io/${{ github.repository_owner }}/quotes-app:${{ github.sha }} .
+          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/quotes-app:${{ github.sha }}
+          docker build -t $IMAGE_NAME .
+          skopeo copy docker-daemon:$IMAGE_NAME docker-archive:quotes-image.tar
 
-      - name: Push Docker image
+      - name: Save image to artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: quotes-app
+          path: quotes-image.tar
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Install skopeo
         run: |
-          docker push ghcr.io/${{ github.repository_owner }}/quotes-app:latest
-          docker push ghcr.io/${{ github.repository_owner }}/quotes-app:${{ github.sha }}
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: quotes-app
+          path: ./artifacts
+
+      - name: Run tests
+        run: |
+          skopeo copy docker-archive:./artifacts/quotes-image.tar docker-daemon:quotes-app:latest
+          docker run quotes-app:latest python manage.py test
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: quotes-app
+          path: ./artifacts
+
+      - name: Copy Docker image to GHCR
+        run: |
+          IMAGE_NAME=ghcr.io/${{ github.repository_owner }}/quotes-app
+          skopeo copy --dest-creds ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} docker-archive:./artifacts/quotes-image.tar docker://${IMAGE_NAME}:latest
+          skopeo copy --dest-creds ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }} docker-archive:./artifacts/quotes-image.tar docker://${IMAGE_NAME}:${{ github.sha }}

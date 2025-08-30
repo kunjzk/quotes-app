@@ -3,3 +3,4 @@ venv/
 __pycache__/
 quotesapp/db.sqlite3
 *.tar
+.env

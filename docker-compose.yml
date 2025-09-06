@@ -7,6 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_NAME}
     ports:
       - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
   quotes-app:
     build:
       context: .
@@ -21,3 +23,8 @@ services:
       POSTGRES_DB: ${POSTGRES_NAME}
       POSTGRES_HOST: quotes-postgres
       POSTGRES_PORT: 5432
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+
+volumes:
+  postgres_data:

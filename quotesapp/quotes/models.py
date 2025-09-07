@@ -1,15 +1,34 @@
 from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.db.models import Q, UniqueConstraint
 
 # Create your models here.
+
+class QuoteManager(models.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(deleted_at__isnull=True)
+
 class Quotes(models.Model):
-    quote = models.TextField(unique=True)
+    quote = models.TextField()
     book = models.ForeignKey('Books', on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     page_number = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    objects = QuoteManager()
+    all_objects = models.Manager()
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["quote"],
+                condition=Q(deleted_at__isnull=True),
+                name="unique_quote_when_not_deleted"
+            )
+        ]
 
     def __str__(self):
         return self.quote

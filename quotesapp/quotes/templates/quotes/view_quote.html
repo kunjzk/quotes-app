@@ -10,3 +10,12 @@
 <p><strong>Updated at</strong>: {{quote.updated_at}}</p>
 <a href="{% url 'quotes:quote_edit' quote.pk %}">Edit Quote</a> |
 <a href="{% url 'quotes:quotes_list' %}">Back to quotes list</a>
+
+<form
+  method="post"
+  action="{% url 'quotes:quote_delete' quote.pk %}"
+  style="display: inline"
+>
+  {% csrf_token %}
+  <button type="submit">Delete</button>
+</form>

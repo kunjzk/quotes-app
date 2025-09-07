@@ -24,6 +24,9 @@ class BooksAdmin(admin.ModelAdmin):
 
 @admin.register(Quotes)
 class QuotesAdmin(admin.ModelAdmin):
-    list_display = ("quote", "book", "user", "page_number", "created_at")
+    list_display = ("quote", "book", "user", "page_number", "created_at", "deleted_at")
     search_fields = ("quote",)
     list_filter = ("book", "user")
+    
+    def get_queryset(self, request):
+        return Quotes.all_objects.all()

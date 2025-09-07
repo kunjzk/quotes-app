@@ -1,10 +1,12 @@
 <h2>All Book Quotes</h2>
-{% if quotes%} {% for quote in quotes %}
+{% if quotes%}
 <ol>
+  {% for quote in quotes %}
   <li>
     <a href="{% url 'quotes:quote_detail' quote.id %}">{{quote.quote}}</a>
   </li>
+  {% endfor %}
 </ol>
-{% endfor %} {% else %}
+{% else %}
 <p>No quotes found</p>
 {% endif %}

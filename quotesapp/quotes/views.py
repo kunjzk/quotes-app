@@ -1,10 +1,11 @@
-from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404, redirect
+from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from .models import Quotes, Books, User
 from django.db import transaction
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm
+from django.utils import timezone
 
 # Create your views here.
 class QuotesListView(ListView):
@@ -21,6 +22,7 @@ class QuoteCreateViewCustomForm(CreateView):
     model = Quotes
     template_name = 'quotes/create_quote.html'
     form_class = QuoteCreateForm
+    context_object_name = 'quote'
     success_url = reverse_lazy('quotes:quotes_list')  # Redirect to quote list
     
     @transaction.atomic
@@ -44,7 +46,8 @@ class QuoteUpdateView(UpdateView):
     template_name = 'quotes/update_quote.html'
     form_class = QuoteCreateForm
     success_url = reverse_lazy('quotes:quotes_list')
-
+    context_object_name = 'quote'
+    
     @transaction.atomic
     def form_valid(self, form):
         book = form.cleaned_data['book']
@@ -57,6 +60,13 @@ class QuoteUpdateView(UpdateView):
             form.instance.book = book
         
         return super().form_valid(form)
+
+class QuoteSoftDeleteView(View):
+    def post(self, request, pk):
+        quote = get_object_or_404(Quotes.all_objects, pk=pk)
+        quote.deleted_at = timezone.now()
+        quote.save(update_fields=["deleted_at"])
+        return redirect("quotes:quotes_list")
 
 
 # Leaving here as a reference for the basic form view

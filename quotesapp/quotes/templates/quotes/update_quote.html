@@ -4,3 +4,11 @@
   <button type="submit">Update Quote</button>
   <a href="{% url 'quotes:quote_detail' object.pk %}">Cancel</a>
 </form>
+<form
+  method="post"
+  action="{% url 'quotes:quote_delete' quote.pk %}"
+  style="display: inline"
+>
+  {% csrf_token %}
+  <button type="submit">Delete</button>
+</form>

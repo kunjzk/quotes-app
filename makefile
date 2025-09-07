@@ -17,6 +17,9 @@ migrate: run-postgres
 runserver: migrate
 	cd quotesapp && python manage.py runserver
 
+test: run-postgres
+	cd quotesapp && python manage.py test
+
 # To test image build in isolation
 build-image:
 	docker build --no-cache --progress=plain -t quotes-local .

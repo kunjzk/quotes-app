@@ -6,7 +6,7 @@ from django.contrib.auth.models import AbstractUser
 class Quotes(models.Model):
     quote = models.TextField(unique=True)
     book = models.ForeignKey('Books', on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     page_number = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -24,4 +24,7 @@ class Books(models.Model):
         return f"{self.title} by author: {self.author}"
 
 class User(AbstractUser):
-    pass
+    email = models.EmailField(unique=True, blank=False)
+
+    def __str__(self):
+        return f"{self.username} - {self.email}"

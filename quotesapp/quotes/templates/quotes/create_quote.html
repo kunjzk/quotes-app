@@ -1,6 +1,5 @@
-<h2>Debug: Form object</h2>
+<h2>Create A Quote</h2>
 <form method="post">
-  {% csrf_token %}
-  <pre>{{ form }}</pre>
+  {% csrf_token %} {{ form.as_p }}
   <button type="submit">Create quote</button>
 </form>

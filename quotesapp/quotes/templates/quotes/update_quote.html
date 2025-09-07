@@ -1,0 +1,6 @@
+<h1>Update Quote</h1>
+<form method="post">
+  {% csrf_token %} {{ form.as_p }}
+  <button type="submit">Update Quote</button>
+  <a href="{% url 'quotes:quote_detail' object.pk %}">Cancel</a>
+</form>

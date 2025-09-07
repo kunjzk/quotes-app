@@ -21,10 +21,12 @@ class Books(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.title} by author: {self.author}"
+        return f"{self.title} by {self.author}"
 
 class User(AbstractUser):
     email = models.EmailField(unique=True, blank=False)
+    first_name = models.CharField(max_length=255, blank=False)
+    last_name = models.CharField(max_length=255, blank=False)
 
     def __str__(self):
         return f"{self.username} - {self.email}"

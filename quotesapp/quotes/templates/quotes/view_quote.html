@@ -1,0 +1,12 @@
+<h1>Quote Details</h1>
+<p><strong>Quote</strong>: {{quote.quote}}</p>
+<h2>Book details</h2>
+<p><strong>Title</strong>: {{quote.book.title}}</p>
+<p><strong>Author</strong>: {{quote.book.author}}</p>
+<p><strong>Page number</strong>: {{quote.page_number}}</p>
+<h2>Quote details</h2>
+<p><strong>Created by</strong>: {{quote.user.username}}</p>
+<p><strong>Created at</strong>: {{quote.created_at}}</p>
+<p><strong>Updated at</strong>: {{quote.updated_at}}</p>
+<a href="{% url 'quotes:quote_edit' quote.pk %}">Edit Quote</a> |
+<a href="{% url 'quotes:quotes_list' %}">Back to quotes list</a>

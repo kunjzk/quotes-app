@@ -1,31 +1,44 @@
 <h1>Edit Quote</h1>
 <form method="post">
   {% csrf_token %}
+  
+  <h2>Quote</h2>
+  <textarea name="quote" rows="6" cols="50" type="text" placeholder="Quote"> {{form.quote.value|default:''}} </textarea>
+  <br />
+
   <h2>Book</h2>
   <h3>Select a pre-existing book</h3>
   <label for="book_id">Select a book</label>
   <select name="book">
     <option value="">-- Select a book --</option>
     {% for book in form.fields.book.queryset %}
-    <option value="{{book.id}}" {% if book.id == form.book.value %}selected{% endif %}>{{book.title}}</option>
+    <option value="{{book.id}}" {% if book.id == form.book.value %}selected{% endif %}>{{book}}</option>
     {% endfor %}
   </select>
   <br />
   <h3>Or create a new book</h3>
   <label for="title">Title</label>
-  <input type="text" name="title" placeholder="Title" value="{{form.title.value|default:''}}" />
+  <input type="text" name="title" placeholder="Title" />
   <br />
   <label for="author">Author</label>
-  <input type="text" name="author" placeholder="Author" value="{{form.author.value|default:''}}" />
+  <input type="text" name="author" placeholder="Author" />
   <br />
-  <h2>Quote</h2>
-  <label for="quote">Quote</label>
-  <input type="text" name="quote" placeholder="Quote" value="{{form.quote.value|default:''}}" required />
-  <br />
+
   <h2>Page number</h2>
   <label for="page_number">Page number</label>
   <input type="number" name="page_number" placeholder="Page number" value="{{form.page_number.value|default:''}}" required />
   <br />
+
+  <h2>User</h2>
+  <label for="user">User</label>
+  <select name="user">
+    <option value="">-- Select a user --</option>
+    {% for user in form.fields.user.queryset %}
+    <option value="{{user.id}}" {% if user.id == form.user.value %}selected{% endif %}>{{user}}</option>
+    {% endfor %}
+  </select>
+  <br />
+
   <button type="submit">Update Quote</button>
   <a href="{% url 'quotes:quote_detail' object.pk %}">Cancel</a>
 </form>

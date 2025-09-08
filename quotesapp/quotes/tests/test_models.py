@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from .models import Books, Quotes
+from quotes.models import Books, Quotes
 from django.utils import timezone
 from django.db import IntegrityError, transaction
 

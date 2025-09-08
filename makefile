@@ -20,6 +20,12 @@ runserver: migrate
 test: run-postgres
 	cd quotesapp && python manage.py test
 
+coverage: run-postgres
+	cd quotesapp && coverage erase && coverage run --rcfile=../.coveragerc manage.py test && coverage report --show-missing
+
+coverage-html: run-postgres
+	cd quotesapp && coverage erase && coverage run --rcfile=../.coveragerc manage.py test &&coverage html && open htmlcov/index.html
+
 # To test image build in isolation
 build-image:
 	docker build --no-cache --progress=plain -t quotes-local .

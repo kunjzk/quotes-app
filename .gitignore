@@ -5,3 +5,5 @@ quotesapp/db.sqlite3
 *.tar
 .env
 .vscode/
+htmlcov/
+.coverage

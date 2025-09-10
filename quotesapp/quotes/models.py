@@ -24,9 +24,9 @@ class Quotes(models.Model):
     class Meta:
         constraints = [
             UniqueConstraint(
-                fields=["quote"],
+                fields=["quote", "user", "book"],
                 condition=Q(deleted_at__isnull=True),
-                name="unique_quote_when_not_deleted"
+                name="unique_quote_per_user_per_book_when_not_deleted"
             )
         ]
 
@@ -38,6 +38,14 @@ class Books(models.Model):
     author = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(
+                fields=["title", "author"],
+                name="unique_title_author"
+            )
+        ]
 
     def __str__(self):
         return f"{self.title} by {self.author}"

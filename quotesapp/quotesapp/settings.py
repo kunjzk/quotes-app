@@ -162,3 +162,8 @@ LOGGING = {
     },
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# Silence logs during testing
+import sys
+if 'test' in sys.argv:
+    LOGGING['root']['level'] = 'ERROR'  # Only show errors during tests

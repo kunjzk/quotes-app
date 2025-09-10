@@ -20,6 +20,7 @@ class QuoteModelTest(TestCase):
     8. Test unique constraint on the quote field is enforced when the quote is not deleted
     9. Test unique constraint on the quote field is not enforced when the quote is deleted
     10. Test that a (hard) deleted quote no longer exists
+    11. Test that two different users can create the same quote for the same book
     """
     def setUp(self):
         """Set up test data"""
@@ -178,12 +179,32 @@ class QuoteModelTest(TestCase):
         quote.delete()
         self.assertFalse(Quotes.objects.filter(id=quote.id).exists())
 
+    def test_unique_constraint_when_different_users(self):
+        """Test unique constraint on the quote field is enforced when the quote is not deleted and the users are different"""
+        Quotes.objects.create(
+            quote=self.quote_text,
+            book=self.book,
+            user=self.user,
+            page_number=self.page_number)
+        new_user = User.objects.create(
+            username='Another Test User',
+            email='another@example.com',
+            password='testpass123'
+        )
+        Quotes.objects.create(
+            quote=self.quote_text,
+            book=self.book,
+            user=new_user,
+            page_number=self.page_number,
+        )
+
 class BookModelTest(TestCase):
     """
     For the books model, we test the following:
     1. Creating a book, asserting it exists and asserting the content is correct
     2. Checking the string representation of the book
     3. Hard deleting the book and asserting it no longer exists
+    4. Test that two identical books cannot be created
     """
     def setUp(self):
         """Set up test data"""
@@ -211,6 +232,15 @@ class BookModelTest(TestCase):
         self.assertTrue(Books.objects.filter(id=self.book.id).exists())
         self.book.delete()
         self.assertFalse(Books.objects.filter(id=self.book.id).exists())
+    
+    def test_unique_constraint_when_identical(self):
+        """Test that two identical books cannot be created"""
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Books.objects.create(
+                    title='Test Book',
+                    author='Test Author'
+                )
 
 class UserModelTest(TestCase):
     """
@@ -236,9 +266,7 @@ class UserModelTest(TestCase):
     
     def test_str_representation(self):
         """Test the string representation of the user"""
-        print(f"USER STR REPR TEST!!! SELF USER TYPE: {type(self.user)} SELF USER MODULE: {print(self.user.__class__.__module__)}")
-        print(f"USER STR REPR TEST!!! USER STR METHOD: {type(self.user.__str__)}")
-        result = self.user.__str__()  # Use str() instead of __str__()
+        result = str(self.user)
         self.assertEqual(result, 'testuser - test@example.com')
     
     def test_change_user(self):

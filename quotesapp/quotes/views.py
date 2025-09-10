@@ -46,8 +46,9 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
     context_object_name = 'quote'
     success_url = reverse_lazy('quotes:quotes_list')  # Redirect to quote list
     
-    @transaction.atomic
     def form_valid(self, form):
+        from django.db import IntegrityError
+        
         # Automatically assign the logged-in user
         form.instance.user = self.request.user
         
@@ -57,22 +58,45 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
         quote = form.cleaned_data['quote']
         page_number = form.cleaned_data['page_number']
 
+        # Handle book creation with get_or_create for idempotency
         if not book and title and author:
-            book = Books.objects.create(title=title, author=author)
+            book, _ = Books.objects.get_or_create(
+                title=title, 
+                author=author,
+            )
             form.instance.book = book
         
-        logger.info(
-            "Quote created",
-            extra={
-                "user": self.request.user.username,
-                "book": str(book) if book else None,
-                "title": title,
-                "author": author,
-                "page_number": page_number,
-                "quote_length": len(quote) if quote else 0,
-            }
-        )
-        return super().form_valid(form)
+        # Try to create the quote, handle duplicates gracefully
+        try:
+            with transaction.atomic():
+                result = super().form_valid(form)
+                logger.info(
+                    "Quote created",
+                    extra={
+                        "user": self.request.user.username,
+                        "quote_id": form.instance.pk,
+                        "book": str(book) if book else None,
+                        "title": title,
+                        "author": author,
+                        "page_number": page_number,
+                    }
+                )
+                return result
+        except IntegrityError:
+            # Quote already exists - find it and redirect (idempotent behavior)
+            existing_quote = Quotes.objects.get(
+                quote=quote,
+                user=self.request.user,
+                book=book
+            )
+            logger.info(
+                "Quote exists, redirecting to detail view",
+                extra={
+                    "user": self.request.user.username,
+                    "existing_quote_id": existing_quote.pk,
+                }
+            )
+            return redirect('quotes:quote_detail', pk=existing_quote.pk)
 
 class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
     model = Quotes

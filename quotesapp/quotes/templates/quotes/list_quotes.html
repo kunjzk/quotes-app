@@ -10,4 +10,14 @@
 </ol>
 {% else %}
 <p>No quotes found</p>
-{% endif %} {% include 'quotes/logout_button.html' %}
+{% endif %}
+
+<br />
+
+<div>
+  <button onclick="window.location.href='{% url 'quotes:quote_create' %}'">
+    Create Quote
+  </button>
+  <br />
+  {% include 'quotes/logout_button.html' %}
+</div>

@@ -34,7 +34,7 @@ class QuoteDetailView(LoginRequiredMixin, UserQuotesQuerySetMixin, DetailView):
         logger.info(
             "Quote viewed",
             extra={
-                "user": self.request.user.username,
+                "user_id": self.request.user.id,
                 "quote_id": obj.pk,
             }
         )
@@ -85,7 +85,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             logger.info(
                 "Quote created",
                 extra={
-                    "user": self.request.user.username,
+                    "user_id": self.request.user.id,
                     "quote_id": form.instance.pk,
                     "book": str(book) if book else None,
                     "title": title,
@@ -104,7 +104,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             logger.info(
                 "Quote exists, redirecting to detail view",
                 extra={
-                    "user": self.request.user.username,
+                    "user_id": self.request.user.id,
                     "existing_quote_id": existing_quote.pk,
                 }
             )
@@ -115,7 +115,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             logger.info(
                 "Quote creation failed due to validation error",
                 extra={
-                    "user": self.request.user.username,
+                    "user_id": self.request.user.id,
                     "error": str(e),
                 }
             )
@@ -154,7 +154,7 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
         logger.info(
             "Quote updated",
             extra={
-                "user": self.request.user.username,
+                "user_id": self.request.user.id,
                 "quote_id": form.instance.pk,
             }
         )
@@ -170,7 +170,7 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
         logger.info(
             "Quote soft deleted",
             extra={
-                "user": self.request.user.username,
+                "user_id": self.request.user.id,
                 "quote_id": quote.pk,
             }
         )

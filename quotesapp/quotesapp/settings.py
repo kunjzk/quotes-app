@@ -143,3 +143,22 @@ AUTH_USER_MODEL = 'quotes.User'
 LOGIN_REDIRECT_URL = '/quotes/'
 LOGOUT_REDIRECT_URL = '/'
 LOGIN_URL = '/'
+
+# Logging configuration
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+        }
+    },
+    "root": {"handlers": ["console"], "level": "INFO"},
+}

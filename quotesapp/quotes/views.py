@@ -7,6 +7,9 @@ from django.urls import reverse_lazy
 from .forms import QuoteCreateForm
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 
@@ -24,6 +27,17 @@ class QuoteDetailView(LoginRequiredMixin, UserQuotesQuerySetMixin, DetailView):
     model = Quotes
     template_name = 'quotes/view_quote.html'
     context_object_name = 'quote'
+    
+    def get_object(self, queryset=None):
+        obj = super().get_object(queryset)
+        logger.info(
+            "Quote viewed",
+            extra={
+                "user": self.request.user.username,
+                "quote_id": obj.pk,
+            }
+        )
+        return obj
   
 class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
     model = Quotes
@@ -47,7 +61,17 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             book = Books.objects.create(title=title, author=author)
             form.instance.book = book
         
-        print(f"book: {book}, title: {title}, author: {author}, page_number: {page_number}, quote: {quote}, user: {self.request.user}")
+        logger.info(
+            "Quote created",
+            extra={
+                "user": self.request.user.username,
+                "book": str(book) if book else None,
+                "title": title,
+                "author": author,
+                "page_number": page_number,
+                "quote_length": len(quote) if quote else 0,
+            }
+        )
         return super().form_valid(form)
 
 class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
@@ -70,6 +94,14 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
             # Create new book if none selected but title/author provided
             book = Books.objects.create(title=title, author=author)
             form.instance.book = book
+
+        logger.info(
+            "Quote updated",
+            extra={
+                "user": self.request.user.username,
+                "quote_id": form.instance.pk,
+            }
+        )
         
         return super().form_valid(form)
 
@@ -79,6 +111,13 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
         quote = get_object_or_404(Quotes.all_objects, pk=pk, user=self.request.user)
         quote.deleted_at = timezone.now()
         quote.save(update_fields=["deleted_at"])
+        logger.info(
+            "Quote soft deleted",
+            extra={
+                "user": self.request.user.username,
+                "quote_id": quote.pk,
+            }
+        )
         return redirect("quotes:quotes_list")
 
 

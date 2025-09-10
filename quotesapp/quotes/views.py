@@ -6,19 +6,26 @@ from django.db import transaction
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm
 from django.utils import timezone
+from django.contrib.auth.mixins import LoginRequiredMixin
 
 # Create your views here.
-class QuotesListView(ListView):
+
+class UserQuotesQuerySetMixin:
+    """Mixin to filter quotes to only show the current user's quotes"""
+    def get_queryset(self):
+        return Quotes.objects.filter(user=self.request.user)
+
+class QuotesListView(LoginRequiredMixin, UserQuotesQuerySetMixin, ListView):
     model = Quotes
     template_name = 'quotes/list_quotes.html'
     context_object_name = 'quotes'
 
-class QuoteDetailView(DetailView):
+class QuoteDetailView(LoginRequiredMixin, UserQuotesQuerySetMixin, DetailView):
     model = Quotes
     template_name = 'quotes/view_quote.html'
     context_object_name = 'quote'
   
-class QuoteCreateViewCustomForm(CreateView):
+class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
     model = Quotes
     template_name = 'quotes/create_quote.html'
     form_class = QuoteCreateForm
@@ -27,21 +34,23 @@ class QuoteCreateViewCustomForm(CreateView):
     
     @transaction.atomic
     def form_valid(self, form):
+        # Automatically assign the logged-in user
+        form.instance.user = self.request.user
+        
         book = form.cleaned_data['book']
         title = form.cleaned_data['title']
         author = form.cleaned_data['author']
         quote = form.cleaned_data['quote']
         page_number = form.cleaned_data['page_number']
-        user = form.cleaned_data['user']
-        
-        if not book:
+
+        if not book and title and author:
             book = Books.objects.create(title=title, author=author)
             form.instance.book = book
         
-        print(f"book: {book}, title: {title}, author: {author}, page_number: {page_number}, quote: {quote}, user: {user}")
+        print(f"book: {book}, title: {title}, author: {author}, page_number: {page_number}, quote: {quote}, user: {self.request.user}")
         return super().form_valid(form)
 
-class QuoteUpdateView(UpdateView):
+class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
     model = Quotes
     template_name = 'quotes/update_quote.html'
     form_class = QuoteCreateForm
@@ -50,6 +59,9 @@ class QuoteUpdateView(UpdateView):
     
     @transaction.atomic
     def form_valid(self, form):
+        # Keep the original user (don't allow changing user on update)
+        # form.instance.user is already set from the existing quote
+        
         book = form.cleaned_data['book']
         title = form.cleaned_data['title']
         author = form.cleaned_data['author']
@@ -61,9 +73,10 @@ class QuoteUpdateView(UpdateView):
         
         return super().form_valid(form)
 
-class QuoteSoftDeleteView(View):
+class QuoteSoftDeleteView(LoginRequiredMixin, View):
     def post(self, request, pk):
-        quote = get_object_or_404(Quotes.all_objects, pk=pk)
+        # Filter to only user's quotes for security
+        quote = get_object_or_404(Quotes.all_objects, pk=pk, user=self.request.user)
         quote.deleted_at = timezone.now()
         quote.save(update_fields=["deleted_at"])
         return redirect("quotes:quotes_list")

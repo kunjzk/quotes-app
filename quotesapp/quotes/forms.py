@@ -32,8 +32,7 @@ class QuoteCreateForm(forms.ModelForm):
     book = forms.ModelChoiceField(queryset=Books.objects.all(), required=False)
     title = forms.CharField(required=False)
     author = forms.CharField(required=False)
-    user = forms.ModelChoiceField(queryset=User.objects.all(), required=True)
 
     class Meta:
         model = Quotes
-        fields = ['quote', 'book', 'page_number', 'user']
+        fields = ['quote', 'book', 'page_number']

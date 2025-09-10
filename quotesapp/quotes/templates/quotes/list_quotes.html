@@ -1,5 +1,6 @@
+{% include 'quotes/user_info.html' %}
 <h2>All Book Quotes</h2>
-{% if quotes%}
+{% if quotes %}
 <ol>
   {% for quote in quotes %}
   <li>
@@ -9,4 +10,4 @@
 </ol>
 {% else %}
 <p>No quotes found</p>
-{% endif %}
+{% endif %} {% include 'quotes/logout_button.html' %}

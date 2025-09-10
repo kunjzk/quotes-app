@@ -1,3 +1,4 @@
+{% include 'quotes/user_info.html' %}
 <h1>Quote Details</h1>
 <p><strong>Quote</strong>: {{quote.quote}}</p>
 <h2>Book details</h2>
@@ -19,3 +20,5 @@
   {% csrf_token %}
   <button type="submit">Delete</button>
 </form>
+
+{% include 'quotes/logout_button.html' %}

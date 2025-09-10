@@ -1,3 +1,4 @@
+{% include 'quotes/user_info.html' %}
 <h1>Update Quote</h1>
 <form method="post">
   {% csrf_token %} {{ form.as_p }}
@@ -12,3 +13,5 @@
   {% csrf_token %}
   <button type="submit">Delete</button>
 </form>
+
+{% include 'quotes/logout_button.html' %}

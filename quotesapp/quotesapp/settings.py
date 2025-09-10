@@ -138,3 +138,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Custom user model
 AUTH_USER_MODEL = 'quotes.User'
+
+# Login/Logout redirects
+LOGIN_REDIRECT_URL = '/quotes/'
+LOGOUT_REDIRECT_URL = '/'
+LOGIN_URL = '/'

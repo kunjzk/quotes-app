@@ -2,6 +2,8 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from quotes.models import Books, Quotes
+from unittest.mock import patch
+from django.db import DatabaseError
 
 User = get_user_model()
 
@@ -25,6 +27,20 @@ class QuoteCreateViewTest(TestCase):
             title="Pragmatic Programmer", 
             author="Hunt/Thomas"
         )
+    
+    def test_create_view_happy_path(self):
+        """
+        Test that the create view properly handles a happy path.
+        """
+        assert self.client.login(username="poster", password="pw")
+        payload = {
+            "book": self.book.id,
+            "quote": "Stone by stone.",
+            "page_number": 100
+        }
+        resp = self.client.post(reverse("quotes:quote_create"), payload, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Stone by stone.", resp.content.decode())
     
     def test_idempotent_create_view(self):
         """
@@ -54,7 +70,64 @@ class QuoteCreateViewTest(TestCase):
             quote="Stone by stone."
         ).count()
         self.assertEqual(quote_count, 1)
-
+    
+    def test_create_view_with_incomplete_book_info(self):
+        """
+        Test that the create view properly handles incomplete book info.
+        """
+        assert self.client.login(username="poster", password="pw")
+        payload = {
+            "book": "",
+            "quote": "Stone by stone.",
+            "page_number": ""
+        }
+        resp = self.client.post(reverse("quotes:quote_create"), payload, follow=False)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("Please select a book or enter both a title and author.", resp.content.decode())
+    
+    def test_create_view_with_book_selected_and_new_book_info(self):
+        """
+        Test that the create view properly handles both book info.
+        """
+        assert self.client.login(username="poster", password="pw")
+        payload = {
+            "book": self.book.id,
+            "title": "Pragmatic Programmer",
+            "author": "Hunt/Thomas",
+            "quote": "Stone by stone.",
+            "page_number": 100
+        }
+        resp = self.client.post(reverse("quotes:quote_create"), payload, follow=False)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("You can only EITHER: 1) select a book OR 2) enter both a title and author.", resp.content.decode())
+    
+    def test_create_view_atomicity_book_creation_fails(self):
+        """
+        Test that the create view handles validation errors gracefully and doesn't create anything.
+        """
+        assert self.client.login(username="poster", password="pw")
+        
+        # Count initial state
+        initial_book_count = Books.objects.count()
+        initial_quote_count = Quotes.objects.count()
+        
+        payload = {
+            "title": "a"*256,  # Too long - will cause validation error
+            "author": "Hunt/Thomas",
+            "quote": "Stone by stone.",
+            "page_number": 100
+        }
+        resp = self.client.post(reverse("quotes:quote_create"), payload, follow=False)
+        
+        # Should return form with errors, not crash
+        self.assertEqual(resp.status_code, 200)  # Form redisplayed with errors
+        
+        # Verify atomicity - nothing should be created
+        self.assertEqual(Books.objects.count(), initial_book_count)
+        self.assertEqual(Quotes.objects.count(), initial_quote_count)
+        
+        # Verify error message is shown
+        self.assertContains(resp, "Validation error")
 
 class QuoteListViewTest(TestCase):
     """

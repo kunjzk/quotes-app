@@ -2,11 +2,12 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
 from .models import Quotes, Books, User
-from django.db import transaction
+from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -58,30 +59,41 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
         quote = form.cleaned_data['quote']
         page_number = form.cleaned_data['page_number']
 
-        # Handle book creation with get_or_create for idempotency
-        if not book and title and author:
-            book, _ = Books.objects.get_or_create(
-                title=title, 
-                author=author,
-            )
-            form.instance.book = book
-        
-        # Try to create the quote, handle duplicates gracefully
+        if not book:
+            if not (title and author):
+                form.add_error(None, "Please select a book or enter both a title and author.")
+                return self.form_invalid(form)
+        else:
+            if title or author:
+                form.add_error(None, "You can only EITHER: 1) select a book OR 2) enter both a title and author.")
+                return self.form_invalid(form)
+
+        # Try to create the quote and book atomically
         try:
             with transaction.atomic():
+                # Handle book creation with get_or_create for idempotency
+                if not book and title and author:
+                    book, _ = Books.objects.get_or_create(
+                        title=title, 
+                        author=author,
+                    )
+                    form.instance.book = book
+                
                 result = super().form_valid(form)
-                logger.info(
-                    "Quote created",
-                    extra={
-                        "user": self.request.user.username,
-                        "quote_id": form.instance.pk,
-                        "book": str(book) if book else None,
-                        "title": title,
-                        "author": author,
-                        "page_number": page_number,
-                    }
-                )
-                return result
+            
+            # Log success after atomic block completes
+            logger.info(
+                "Quote created",
+                extra={
+                    "user": self.request.user.username,
+                    "quote_id": form.instance.pk,
+                    "book": str(book) if book else None,
+                    "title": title,
+                    "author": author,
+                    "page_number": page_number,
+                }
+            )
+            return result
         except IntegrityError:
             # Quote already exists - find it and redirect (idempotent behavior)
             existing_quote = Quotes.objects.get(
@@ -97,6 +109,17 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
                 }
             )
             return redirect('quotes:quote_detail', pk=existing_quote.pk)
+        except (ValidationError, DataError) as e:
+            # Book or quote validation failed (e.g., title too long)
+            form.add_error(None, f"Validation error: {e}")
+            logger.info(
+                "Quote creation failed due to validation error",
+                extra={
+                    "user": self.request.user.username,
+                    "error": str(e),
+                }
+            )
+            return self.form_invalid(form)
 
 class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
     model = Quotes
@@ -113,6 +136,15 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
         book = form.cleaned_data['book']
         title = form.cleaned_data['title']
         author = form.cleaned_data['author']
+
+        if not book:
+            if not (title and author):
+                form.add_error(None, "Please select a book or enter both a title and author.")
+                return self.form_invalid(form)
+        else:
+            if title or author:
+                form.add_error(None, "You can only EITHER: 1) select a book OR 2) enter both a title and author.")
+                return self.form_invalid(form)
         
         if not book and title and author:
             # Create new book if none selected but title/author provided

@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 import logging
+from .services import create_quote
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
     context_object_name = 'quote'
     success_url = reverse_lazy('quotes:quotes_list')  # Redirect to quote list
     
-    def form_valid(self, form):
-        from django.db import IntegrityError
-        
+    def form_valid(self, form):      
         # Automatically assign the logged-in user
         form.instance.user = self.request.user
         
@@ -59,68 +58,16 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
         quote = form.cleaned_data['quote']
         page_number = form.cleaned_data['page_number']
 
-        if not book:
-            if not (title and author):
-                form.add_error(None, "Please select a book or enter both a title and author.")
-                return self.form_invalid(form)
-        else:
-            if title or author:
-                form.add_error(None, "You can only EITHER: 1) select a book OR 2) enter both a title and author.")
-                return self.form_invalid(form)
-
-        # Try to create the quote and book atomically
-        try:
-            with transaction.atomic():
-                # Handle book creation with get_or_create for idempotency
-                if not book and title and author:
-                    book, _ = Book.objects.get_or_create(
-                        title=title, 
-                        author=author,
-                    )
-                    form.instance.book = book
-                
-                result = super().form_valid(form)
-            
-            # Log success after atomic block completes
-            logger.info(
-                "Quote created",
-                extra={
-                    "user_id": self.request.user.id,
-                    "quote_id": form.instance.pk,
-                    "book": str(book) if book else None,
-                    "title": title,
-                    "author": author,
-                    "page_number": page_number,
-                }
-            )
-            return result
-        except IntegrityError:
-            # Quote already exists - find it and redirect (idempotent behavior)
-            existing_quote = Quote.objects.get(
-                quote=quote,
-                user=self.request.user,
-                book=book
-            )
-            logger.info(
-                "Quote exists, redirecting to detail view",
-                extra={
-                    "user_id": self.request.user.id,
-                    "existing_quote_id": existing_quote.pk,
-                }
-            )
-            return redirect('quotes:quote_detail', pk=existing_quote.pk)
-        except (ValidationError, DataError) as e:
-            # Book or quote validation failed (e.g., title too long)
-            form.add_error(None, f"Validation error: {e}")
-            logger.info(
-                "Quote creation failed due to validation error",
-                extra={
-                    "user_id": self.request.user.id,
-                    "error": str(e),
-                }
-            )
+        result = create_quote(quote, book, title, author, page_number, self.request.user)
+        if result.status == "form_error":
+            form.add_error(None, result.error_message)
             return self.form_invalid(form)
-
+        elif result.status == "quote_exists":
+            return redirect('quotes:quote_detail', pk=result.existing_quote_id)
+        else: 
+            # result.status == "success"
+            return redirect(self.success_url)
+        
 class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
     model = Quote
     template_name = 'quotes/update_quote.html'

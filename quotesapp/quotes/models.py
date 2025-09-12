@@ -9,9 +9,9 @@ class QuoteManager(models.Manager):
     def get_queryset(self):
         return super().get_queryset().filter(deleted_at__isnull=True)
 
-class Quotes(models.Model):
+class Quote(models.Model):
     quote = models.TextField()
-    book = models.ForeignKey('Books', on_delete=models.CASCADE)
+    book = models.ForeignKey('Book', on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     page_number = models.IntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,7 +33,7 @@ class Quotes(models.Model):
     def __str__(self):
         return self.quote
 
-class Books(models.Model):
+class Book(models.Model):
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView
-from .models import Quotes, Books, User
+from .models import Quote, Book, User
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm
@@ -17,15 +17,15 @@ logger = logging.getLogger(__name__)
 class UserQuotesQuerySetMixin:
     """Mixin to filter quotes to only show the current user's quotes"""
     def get_queryset(self):
-        return Quotes.objects.filter(user=self.request.user)
+        return Quote.objects.filter(user=self.request.user)
 
 class QuotesListView(LoginRequiredMixin, UserQuotesQuerySetMixin, ListView):
-    model = Quotes
+    model = Quote
     template_name = 'quotes/list_quotes.html'
     context_object_name = 'quotes'
 
 class QuoteDetailView(LoginRequiredMixin, UserQuotesQuerySetMixin, DetailView):
-    model = Quotes
+    model = Quote
     template_name = 'quotes/view_quote.html'
     context_object_name = 'quote'
     
@@ -41,7 +41,7 @@ class QuoteDetailView(LoginRequiredMixin, UserQuotesQuerySetMixin, DetailView):
         return obj
   
 class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
-    model = Quotes
+    model = Quote
     template_name = 'quotes/create_quote.html'
     form_class = QuoteCreateForm
     context_object_name = 'quote'
@@ -73,7 +73,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             with transaction.atomic():
                 # Handle book creation with get_or_create for idempotency
                 if not book and title and author:
-                    book, _ = Books.objects.get_or_create(
+                    book, _ = Book.objects.get_or_create(
                         title=title, 
                         author=author,
                     )
@@ -96,7 +96,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             return result
         except IntegrityError:
             # Quote already exists - find it and redirect (idempotent behavior)
-            existing_quote = Quotes.objects.get(
+            existing_quote = Quote.objects.get(
                 quote=quote,
                 user=self.request.user,
                 book=book
@@ -122,7 +122,7 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
             return self.form_invalid(form)
 
 class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
-    model = Quotes
+    model = Quote
     template_name = 'quotes/update_quote.html'
     form_class = QuoteCreateForm
     success_url = reverse_lazy('quotes:quotes_list')
@@ -148,7 +148,7 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
         
         if not book and title and author:
             # Create new book if none selected but title/author provided
-            book = Books.objects.create(title=title, author=author)
+            book = Book.objects.create(title=title, author=author)
             form.instance.book = book
 
         logger.info(
@@ -164,7 +164,7 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
 class QuoteSoftDeleteView(LoginRequiredMixin, View):
     def post(self, request, pk):
         # Filter to only user's quotes for security
-        quote = get_object_or_404(Quotes.all_objects, pk=pk, user=self.request.user)
+        quote = get_object_or_404(Quote.all_objects, pk=pk, user=self.request.user)
         quote.deleted_at = timezone.now()
         quote.save(update_fields=["deleted_at"])
         logger.info(

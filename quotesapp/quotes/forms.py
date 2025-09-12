@@ -1,5 +1,5 @@
 from django import forms
-from .models import User, Books, Quotes
+from .models import User, Book, Quote
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 
 class QuotesUserCreationForm(UserCreationForm):
@@ -29,10 +29,10 @@ class QuotesUserChangeForm(UserChangeForm):
         return email
 
 class QuoteCreateForm(forms.ModelForm):
-    book = forms.ModelChoiceField(queryset=Books.objects.all(), required=False)
+    book = forms.ModelChoiceField(queryset=Book.objects.all(), required=False)
     title = forms.CharField(required=False)
     author = forms.CharField(required=False)
 
     class Meta:
-        model = Quotes
+        model = Quote
         fields = ['quote', 'book', 'page_number']

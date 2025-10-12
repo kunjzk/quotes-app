@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from quotes.models import Books, Quotes
+from quotes.models import Book, Quote
 from unittest.mock import patch
 from django.db import DatabaseError
 
@@ -23,7 +23,7 @@ class QuoteCreateViewTest(TestCase):
             email='poster@example.com',
             password='pw'
         )
-        self.book = Books.objects.create(
+        self.book = Book.objects.create(
             title="Pragmatic Programmer", 
             author="Hunt/Thomas"
         )
@@ -64,7 +64,7 @@ class QuoteCreateViewTest(TestCase):
         self.assertIn(resp2.status_code, [302, 303])
 
         # Exactly one row should exist
-        quote_count = Quotes.objects.filter(
+        quote_count = Quote.objects.filter(
             user=self.user, 
             book=self.book, 
             quote="Stone by stone."
@@ -108,8 +108,8 @@ class QuoteCreateViewTest(TestCase):
         assert self.client.login(username="poster", password="pw")
         
         # Count initial state
-        initial_book_count = Books.objects.count()
-        initial_quote_count = Quotes.objects.count()
+        initial_book_count = Book.objects.count()
+        initial_quote_count = Quote.objects.count()
         
         payload = {
             "title": "a"*256,  # Too long - will cause validation error
@@ -123,11 +123,11 @@ class QuoteCreateViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)  # Form redisplayed with errors
         
         # Verify atomicity - nothing should be created
-        self.assertEqual(Books.objects.count(), initial_book_count)
-        self.assertEqual(Quotes.objects.count(), initial_quote_count)
+        self.assertEqual(Book.objects.count(), initial_book_count)
+        self.assertEqual(Quote.objects.count(), initial_quote_count)
         
         # Verify error message is shown
-        self.assertContains(resp, "Validation error")
+        self.assertContains(resp, "Title must be less than 255 characters")
 
 class QuoteListViewTest(TestCase):
     """
@@ -153,7 +153,7 @@ class QuoteListViewTest(TestCase):
         )
         
         # Create a book
-        self.book = Books.objects.create(
+        self.book = Book.objects.create(
             title="Grokking Algorithms", 
             author="Bhargava"
         )
@@ -163,12 +163,12 @@ class QuoteListViewTest(TestCase):
         Hitting 'quotes:quotes_list' only shows the current user's non-deleted quotes.
         """
         # Create quotes for both users
-        q1 = Quotes.objects.create(
+        q1 = Quote.objects.create(
             user=self.user1, 
             book=self.book, 
             quote="Greedy stays greedy."
         )
-        Quotes.objects.create(
+        Quote.objects.create(
             user=self.user2, 
             book=self.book, 
             quote="Graphs are friends."

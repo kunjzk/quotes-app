@@ -1,5 +1,6 @@
 from quotes.models import Quote, Book, User
-from django.db import transaction, DataError, IntegrityError, ValidationError, DatabaseError
+from django.db import transaction, DataError, IntegrityError, DatabaseError
+from django.core.exceptions import ValidationError
 
 class QuoteCreationResult:
     def __init__(self, quote: Quote, status: str, existing_quote_id: int|None, error_message: str|None):

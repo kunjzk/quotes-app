@@ -1,6 +1,6 @@
 from django.test import TestCase
 from django.contrib.auth import get_user_model
-from quotes.models import Books, Quotes
+from quotes.models import Book, Quote
 from django.utils import timezone
 from django.db import IntegrityError, transaction
 
@@ -29,7 +29,7 @@ class QuoteModelTest(TestCase):
             email='test@example.com',
             password='testpass123'
         )
-        self.book = Books.objects.create(
+        self.book = Book.objects.create(
             title='Test Book',
             author='Test Author'
         )
@@ -40,7 +40,7 @@ class QuoteModelTest(TestCase):
         """Test creating a quote and checking it exists"""
         
         # Create a quote
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -48,10 +48,10 @@ class QuoteModelTest(TestCase):
         )
         
         # Check that the quote exists
-        self.assertTrue(Quotes.objects.filter(id=quote.id).exists())
+        self.assertTrue(Quote.objects.filter(id=quote.id).exists())
         
         # Check the quote content
-        saved_quote = Quotes.objects.get(id=quote.id)
+        saved_quote = Quote.objects.get(id=quote.id)
         self.assertEqual(saved_quote.quote, self.quote_text)
         self.assertEqual(saved_quote.book, self.book)
         self.assertEqual(saved_quote.user, self.user)
@@ -59,7 +59,7 @@ class QuoteModelTest(TestCase):
     
     def test_str_representation(self):
         """Test the string representation of the quote"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -68,7 +68,7 @@ class QuoteModelTest(TestCase):
     
     def test_change_quote(self):
         """Test changing the quote and asserting the changes are saved"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -79,13 +79,13 @@ class QuoteModelTest(TestCase):
     
     def test_change_book(self):
         """Test changing the book and asserting the changes are saved"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
             page_number=self.page_number)
         
-        new_book = Books.objects.create(
+        new_book = Book.objects.create(
             title='Another Test Book',
             author='Another Author'
         )
@@ -95,7 +95,7 @@ class QuoteModelTest(TestCase):
     
     def test_change_user(self):
         """Test changing the user and asserting the changes are saved"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -111,7 +111,7 @@ class QuoteModelTest(TestCase):
     
     def test_change_page_number(self):
         """Test changing the page number and asserting the changes are saved"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -122,19 +122,19 @@ class QuoteModelTest(TestCase):
     
     def test_soft_delete_quote(self):
         """Test soft deleting the quote and asserting it is excluded by the default manager, but included by the all_objects manager"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
             page_number=self.page_number)
         quote.deleted_at = timezone.now()
         quote.save()
-        self.assertFalse(Quotes.objects.filter(id=quote.id).exists())
-        self.assertTrue(Quotes.all_objects.filter(id=quote.id).exists())
+        self.assertFalse(Quote.objects.filter(id=quote.id).exists())
+        self.assertTrue(Quote.all_objects.filter(id=quote.id).exists())
     
     def test_unique_constraint_when_not_deleted(self):
         """Test unique constraint on the quote field is enforced when the quote is not deleted"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -142,7 +142,7 @@ class QuoteModelTest(TestCase):
         
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                Quotes.objects.create(
+                Quote.objects.create(
                     quote=self.quote_text,
                     book=self.book,
                     user=self.user,
@@ -151,7 +151,7 @@ class QuoteModelTest(TestCase):
     
     def test_unique_constraint_when_deleted(self):
         """Test unique constraint on the quote field is not enforced when a quote is soft deleted"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -159,7 +159,7 @@ class QuoteModelTest(TestCase):
         quote.deleted_at = timezone.now()
         quote.save()
         
-        quote_new = Quotes.objects.create(
+        quote_new = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -170,18 +170,18 @@ class QuoteModelTest(TestCase):
 
     def test_hard_delete_quote(self):
         """Test that a hard deleted quote no longer exists"""
-        quote = Quotes.objects.create(
+        quote = Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
             page_number=self.page_number)
-        self.assertTrue(Quotes.objects.filter(id=quote.id).exists())
+        self.assertTrue(Quote.objects.filter(id=quote.id).exists())
         quote.delete()
-        self.assertFalse(Quotes.objects.filter(id=quote.id).exists())
+        self.assertFalse(Quote.objects.filter(id=quote.id).exists())
 
     def test_unique_constraint_when_different_users(self):
         """Test unique constraint on the quote field is enforced when the quote is not deleted and the users are different"""
-        Quotes.objects.create(
+        Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=self.user,
@@ -191,7 +191,7 @@ class QuoteModelTest(TestCase):
             email='another@example.com',
             password='testpass123'
         )
-        Quotes.objects.create(
+        Quote.objects.create(
             quote=self.quote_text,
             book=self.book,
             user=new_user,
@@ -208,7 +208,7 @@ class BookModelTest(TestCase):
     """
     def setUp(self):
         """Set up test data"""
-        self.book = Books.objects.create(
+        self.book = Book.objects.create(
             title='Test Book',
             author='Test Author'
         )
@@ -216,10 +216,10 @@ class BookModelTest(TestCase):
     def test_create_book(self):
         """Test creating a book and checking it exists"""     
         # Check that the book exists
-        self.assertTrue(Books.objects.filter(id=self.book.id).exists())
+        self.assertTrue(Book.objects.filter(id=self.book.id).exists())
         
         # Check the book content
-        saved_book = Books.objects.get(id=self.book.id)
+        saved_book = Book.objects.get(id=self.book.id)
         self.assertEqual(saved_book.title, 'Test Book')
         self.assertEqual(saved_book.author, 'Test Author')
 
@@ -229,15 +229,15 @@ class BookModelTest(TestCase):
     
     def test_hard_delete_book(self):
         """Test that a hard deleted book no longer exists"""
-        self.assertTrue(Books.objects.filter(id=self.book.id).exists())
+        self.assertTrue(Book.objects.filter(id=self.book.id).exists())
         self.book.delete()
-        self.assertFalse(Books.objects.filter(id=self.book.id).exists())
+        self.assertFalse(Book.objects.filter(id=self.book.id).exists())
     
     def test_unique_constraint_when_identical(self):
         """Test that two identical books cannot be created"""
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                Books.objects.create(
+                Book.objects.create(
                     title='Test Book',
                     author='Test Author'
                 )

@@ -2,6 +2,11 @@ from quotes.models import Quote, Book, User
 from django.db import transaction, DataError, IntegrityError, DatabaseError
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.conf import settings
+from django.utils import timezone
+import logging
+
+logger = logging.getLogger(__name__)
 
 class QuoteCreationResult:
     def __init__(self, quote: Quote, status: str, existing_quote_id: int|None, error_message: str|None):
@@ -82,13 +87,26 @@ def create_quote(quote_text: str, book: Book|None, title: str|None, author: str|
             quote.save()
             return QuoteCreationResult(quote, "success", None, None)
 
-def send_email(email: str, subject: str, quotes: list[Quote]) -> None:
+def find_quotes_and_send_email(user_id: int) -> None:
     """
-    Send an email.
+    Pick three random quotes from the user's quotes and send an email to the user.
     """
+    user = User.objects.get(id=user_id)
+    logger.info(f"Finding quotes and sending email to {user.email}")
+    quotes = Quote.objects.filter(user=user).filter(deleted_at__isnull=True).order_by('?')[:3]
+    if not quotes:
+        logger.info(f"No quotes found for user {user.email}, not sending email")
+        return
+    
+    date = timezone.now().strftime("%Y-%m-%d")
+    authors_str = ", ".join([quote.book.author for quote in quotes[:-1]]) + f" and {quotes[-1].book.author}"
+    subject = f"{date}: Quotes from {authors_str}"
     message = ""
+    message += f"Dear {user.first_name},\n\n"
+    message += f"Here are three quotes from your collection. Hope you enjoy them!\n\n"
     for quote in quotes:
         message += f"{quote.quote}\n"
         message += f"{quote.book.title} - {quote.book.author}\n"
         message += f"{quote.page_number}\n"
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])
+    message += "\n\nSee you tomorrow!\n\nBest regards,\nThe Quotes App"
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])

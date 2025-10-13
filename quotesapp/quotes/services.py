@@ -1,6 +1,7 @@
 from quotes.models import Quote, Book, User
 from django.db import transaction, DataError, IntegrityError, DatabaseError
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
 
 class QuoteCreationResult:
     def __init__(self, quote: Quote, status: str, existing_quote_id: int|None, error_message: str|None):
@@ -80,3 +81,14 @@ def create_quote(quote_text: str, book: Book|None, title: str|None, author: str|
                 )
             quote.save()
             return QuoteCreationResult(quote, "success", None, None)
+
+def send_email(email: str, subject: str, quotes: list[Quote]) -> None:
+    """
+    Send an email.
+    """
+    message = ""
+    for quote in quotes:
+        message += f"{quote.quote}\n"
+        message += f"{quote.book.title} - {quote.book.author}\n"
+        message += f"{quote.page_number}\n"
+    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [email])

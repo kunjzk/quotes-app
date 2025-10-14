@@ -25,6 +25,10 @@ services:
       POSTGRES_PORT: 5432
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+  quotes-redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
 
 volumes:
   postgres_data:

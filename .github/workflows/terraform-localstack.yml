@@ -48,13 +48,10 @@ jobs:
         with:
           terraform_version: "~1.0"
 
-      - name: Install AWS CLI (for testing)
+      - name: Verify AWS CLI
         run: |
-          # Install AWS CLI v2 for Ubuntu 24.04
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip -q awscliv2.zip
-          sudo ./aws/install
-          rm -rf aws awscliv2.zip
+          # AWS CLI is pre-installed on GitHub Actions runners
+          aws --version
 
       - name: Wait for LocalStack to be ready
         run: |

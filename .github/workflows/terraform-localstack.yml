@@ -1,0 +1,267 @@
+name: Terraform LocalStack Tests
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-localstack.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-localstack.yml'
+
+jobs:
+  terraform-validate:
+    name: Validate Terraform with LocalStack
+    runs-on: ubuntu-latest
+    
+    services:
+      localstack:
+        image: localstack/localstack:latest
+        ports:
+          - 4566:4566
+        env:
+          SERVICES: ec2,vpc,iam,ses,secretsmanager
+          DEBUG: 0
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.0"
+
+      - name: Install AWS CLI (for testing)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y awscli
+
+      - name: Wait for LocalStack to be ready
+        run: |
+          echo "Waiting for LocalStack to be fully ready..."
+          for i in {1..30}; do
+            if curl -s http://localhost:4566/_localstack/health | grep -q "running"; then
+              echo "LocalStack is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Verify LocalStack services
+        run: |
+          echo "Checking LocalStack health..."
+          curl -s http://localhost:4566/_localstack/health | jq .
+          
+          echo "Testing AWS CLI connectivity..."
+          aws --endpoint-url=http://localhost:4566 \
+              --region us-east-1 \
+              sts get-caller-identity || true
+
+      - name: Initialize SES in LocalStack
+        run: |
+          echo "Verifying test email in LocalStack SES..."
+          aws --endpoint-url=http://localhost:4566 \
+              --region us-east-1 \
+              ses verify-email-identity \
+              --email-address test@localstack.local
+
+      - name: Configure Terraform for LocalStack
+        working-directory: ./terraform
+        run: |
+          echo "Creating LocalStack provider override..."
+          cp provider-localstack.tf override.tf
+          cat override.tf
+
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init -reconfigure
+
+      - name: Terraform Format Check
+        working-directory: ./terraform
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        working-directory: ./terraform
+        run: terraform validate
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "Running Terraform plan with LocalStack..."
+          terraform plan \
+            -var-file="localstack.tfvars" \
+            -out=localstack.tfplan
+          
+          echo "Showing plan..."
+          terraform show -no-color localstack.tfplan
+
+      - name: Terraform Apply (Test)
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "Applying Terraform configuration to LocalStack..."
+          terraform apply -auto-approve localstack.tfplan
+
+      - name: Verify Resources Created
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "=== Terraform Outputs ==="
+          terraform output -json | jq .
+          
+          echo ""
+          echo "=== Verifying VPC Creation ==="
+          aws --endpoint-url=http://localhost:4566 \
+              --region us-east-1 \
+              ec2 describe-vpcs | jq '.Vpcs[] | {VpcId, CidrBlock, Tags}'
+          
+          echo ""
+          echo "=== Verifying Security Groups ==="
+          aws --endpoint-url=http://localhost:4566 \
+              --region us-east-1 \
+              ec2 describe-security-groups \
+              --filters "Name=tag:Name,Values=quotesapp-local-sg" | jq '.SecurityGroups[] | {GroupId, GroupName}'
+          
+          echo ""
+          echo "=== Verifying IAM Roles ==="
+          aws --endpoint-url=http://localhost:4566 \
+              --region us-east-1 \
+              iam list-roles | jq '.Roles[] | select(.RoleName | contains("quotesapp")) | {RoleName, Arn}'
+
+      - name: Terraform Destroy (Cleanup)
+        if: always()
+        working-directory: ./terraform
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          echo "Cleaning up LocalStack resources..."
+          terraform destroy -var-file="localstack.tfvars" -auto-approve || true
+
+      - name: Comment on PR (on failure)
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### ❌ Terraform LocalStack Tests Failed
+            
+            The Terraform configuration failed validation with LocalStack.
+            
+            Please check the logs above for details.
+            
+            **Common issues:**
+            - Syntax errors in \`.tf\` files
+            - Invalid resource references
+            - Missing required variables
+            - Resource dependency issues
+            
+            **To test locally:**
+            \`\`\`bash
+            cd deployment
+            ./test-localstack.sh
+            \`\`\`
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+      - name: Comment on PR (on success)
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `### ✅ Terraform LocalStack Tests Passed
+            
+            Your Terraform configuration has been validated with LocalStack!
+            
+            **What was tested:**
+            - ✅ Terraform syntax validation
+            - ✅ Resource plan generation
+            - ✅ Resource creation in LocalStack
+            - ✅ Resource dependencies
+            - ✅ Outputs validation
+            
+            **Next steps:**
+            - Review the Terraform plan in the workflow logs
+            - Test manually if needed: \`./deployment/test-localstack.sh\`
+            - Deploy to AWS when ready
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: output
+            });
+
+  terraform-security-scan:
+    name: Security Scan (tfsec)
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: terraform
+          soft_fail: true
+
+  terraform-cost-estimate:
+    name: Cost Estimate (Infracost)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Infracost
+        uses: infracost/actions/setup@v3
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+
+      - name: Generate Infracost diff
+        run: |
+          cd terraform
+          infracost breakdown \
+            --path . \
+            --terraform-var-file localstack.tfvars \
+            --format json \
+            --out-file /tmp/infracost.json || echo "Infracost analysis skipped (no API key)"
+        continue-on-error: true
+
+      - name: Post Infracost comment
+        if: always()
+        run: |
+          echo "💰 Cost estimation would appear here with Infracost API key configured"

@@ -116,6 +116,7 @@ Benefits:
 - ✅ Validate Terraform syntax and dependencies
 - ✅ Iterate quickly on infrastructure changes
 - ✅ Catch errors before production deployment
+- ✅ **Automatic CI validation** on every PR
 
 ## Features
 

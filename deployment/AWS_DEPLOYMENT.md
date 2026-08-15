@@ -386,6 +386,8 @@ This allows you to:
 - Catch errors before AWS deployment
 - No AWS costs
 
+**CI Integration:** LocalStack tests run automatically on every PR! The CI will validate your Terraform and comment on the PR with results.
+
 See [LocalStack Testing Guide](LOCALSTACK_TESTING.md) for detailed instructions.
 
 ## Next Steps

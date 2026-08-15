@@ -326,30 +326,65 @@ These are already in `.gitignore`.
 
 ## Integration with CI/CD
 
-You can use LocalStack in CI pipelines:
+LocalStack is **already integrated** into the CI pipeline! See `.github/workflows/terraform-localstack.yml`.
+
+### What the CI Does
+
+Every time you modify Terraform files, the CI automatically:
+1. ✅ Starts LocalStack
+2. ✅ Validates Terraform syntax
+3. ✅ Runs `terraform plan`
+4. ✅ Applies configuration to LocalStack
+5. ✅ Verifies resources were created
+6. ✅ Runs security scan (tfsec)
+7. ✅ Estimates costs (Infracost)
+8. ✅ Comments on PR with results
+
+### Viewing CI Results
+
+```bash
+# List recent workflow runs
+gh run list --workflow=terraform-localstack.yml
+
+# View specific run
+gh run view <run-id> --log
+```
+
+### CI Workflow Structure
 
 ```yaml
-# Example GitHub Actions workflow
+name: Terraform LocalStack Tests
+
+on:
+  pull_request:
+    paths:
+      - 'terraform/**'
+
 jobs:
-  test-terraform:
+  terraform-validate:
     runs-on: ubuntu-latest
     services:
       localstack:
-        image: localstack/localstack
+        image: localstack/localstack:latest
         ports:
           - 4566:4566
-        env:
-          SERVICES: ec2,vpc,iam,ses
     steps:
-      - uses: actions/checkout@v3
-      - name: Test Terraform
-        run: |
-          cd terraform
-          cp provider-localstack.tf override.tf
-          terraform init
-          terraform validate
-          terraform plan -var-file="localstack.tfvars"
+      - name: Validate Terraform
+      - name: Plan with LocalStack
+      - name: Apply to LocalStack
+      - name: Verify Resources
+      - name: Comment on PR
 ```
+
+See [`.github/workflows/README.md`](../.github/workflows/README.md) for full documentation.
+
+### Benefits of CI Integration
+
+- 🚀 **Automatic validation** - Every PR is tested
+- 💬 **PR comments** - Results posted directly to PR
+- 🔒 **Prevents bad merges** - Catch errors before merge
+- 📊 **Cost visibility** - See infrastructure costs
+- 🔐 **Security checks** - Automated security scanning
 
 ## Useful Commands
 

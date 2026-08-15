@@ -17,6 +17,8 @@ services:
       - 8000:8000
     depends_on:
       - quotes-postgres
+      - quotes-redis
+      - quotes-mailhog
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -25,10 +27,64 @@ services:
       POSTGRES_PORT: 5432
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      CELERY_BROKER_URL: redis://quotes-redis:6379
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: quotes-mailhog
+      EMAIL_PORT: 1025
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
   quotes-redis:
     image: redis:latest
     ports:
       - 6379:6379
+  quotes-mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - 1025:1025  # SMTP server
+      - 8025:8025  # Web UI
+  quotes-celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A quotesapp worker -l info
+    depends_on:
+      - quotes-postgres
+      - quotes-redis
+      - quotes-mailhog
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_NAME}
+      POSTGRES_HOST: quotes-postgres
+      POSTGRES_PORT: 5432
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      CELERY_BROKER_URL: redis://quotes-redis:6379
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: quotes-mailhog
+      EMAIL_PORT: 1025
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
+  quotes-celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A quotesapp beat -l info
+    depends_on:
+      - quotes-postgres
+      - quotes-redis
+      - quotes-mailhog
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_NAME}
+      POSTGRES_HOST: quotes-postgres
+      POSTGRES_PORT: 5432
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      CELERY_BROKER_URL: redis://quotes-redis:6379
+      EMAIL_BACKEND: ${EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: quotes-mailhog
+      EMAIL_PORT: 1025
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
 
 volumes:
   postgres_data:

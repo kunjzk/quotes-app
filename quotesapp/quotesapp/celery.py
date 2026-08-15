@@ -13,7 +13,7 @@ app.autodiscover_tasks()
 
 @app.on_after_configure.connect
 def setup_periodic_tasks(sender: Celery, **kwargs):
-    # Executes every Monday morning at 7:30 a.m.
+    # Executes every day at 7:30 a.m. UTC
     sender.add_periodic_task(
         crontab(hour=7, minute=30, day_of_week='*'),
         'quotes.tasks.create_email_tasks',

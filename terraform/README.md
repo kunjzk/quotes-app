@@ -13,6 +13,17 @@ This directory contains Terraform configuration to deploy the Quotes App infrast
 
 ## Quick Start
 
+### Test Locally First (Recommended)
+
+```bash
+cd ../deployment
+./test-localstack.sh
+```
+
+See [LocalStack Testing Guide](../deployment/LOCALSTACK_TESTING.md) for details.
+
+### Deploy to AWS
+
 1. **Copy and configure variables:**
    ```bash
    cp terraform.tfvars.example terraform.tfvars

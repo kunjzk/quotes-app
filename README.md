@@ -82,8 +82,17 @@ The deployment includes:
 - AWS SES integration for email
 - systemd service for automatic startup
 - Production-ready Docker Compose configuration
+- LocalStack support for local testing
 
-Quick start:
+### Quick Start
+
+**Test locally first (recommended):**
+```bash
+cd deployment
+./test-localstack.sh
+```
+
+**Then deploy to AWS:**
 ```bash
 cd terraform
 cp terraform.tfvars.example terraform.tfvars
@@ -95,6 +104,18 @@ terraform apply
 cd ../deployment
 ./deploy.sh <server-ip> ~/.ssh/your-key.pem
 ```
+
+### Testing Infrastructure Locally
+
+Use LocalStack to test Terraform configurations locally before deploying to AWS:
+
+📖 **[LocalStack Testing Guide](deployment/LOCALSTACK_TESTING.md)**
+
+Benefits:
+- ✅ Test IaC without AWS costs
+- ✅ Validate Terraform syntax and dependencies
+- ✅ Iterate quickly on infrastructure changes
+- ✅ Catch errors before production deployment
 
 ## Features
 

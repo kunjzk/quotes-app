@@ -1,0 +1,54 @@
+# LocalStack Docker Compose Configuration
+# For testing AWS infrastructure locally
+# Usage: docker-compose -f docker-compose.localstack.yml up -d
+
+version: '3.8'
+
+services:
+  localstack:
+    container_name: quotesapp-localstack
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"            # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      # Core LocalStack configuration
+      - SERVICES=ec2,vpc,iam,ses,secretsmanager
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      
+      # LocalStack Pro features (uncomment if you have Pro)
+      # - LOCALSTACK_API_KEY=${LOCALSTACK_API_KEY}
+      
+      # Persistence (optional)
+      # - PERSISTENCE=1
+      # - PERSIST_PATH=/tmp/localstack/data
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "./terraform/localstack-init.sh:/etc/localstack/init/ready.d/init.sh"
+    networks:
+      - localstack
+
+  # AWS CLI container for easy testing
+  awscli:
+    image: amazon/aws-cli:latest
+    container_name: quotesapp-awscli
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ENDPOINT_URL=http://localstack:4566
+    networks:
+      - localstack
+    entrypoint: /bin/sh
+    command: -c "sleep infinity"
+    depends_on:
+      - localstack
+
+networks:
+  localstack:
+    name: quotesapp-localstack

@@ -2,6 +2,8 @@
 
 This guide walks you through deploying the Quotes App to AWS using Terraform.
 
+> **💡 Want to test locally first?** See [LocalStack Testing Guide](LOCALSTACK_TESTING.md) to test your infrastructure locally before deploying to AWS.
+
 ## Architecture Overview
 
 ```
@@ -367,6 +369,24 @@ Type `yes` when prompted. This will delete:
 - All associated resources
 
 **Warning**: This will permanently delete your instance and all data!
+
+## Testing Locally with LocalStack
+
+Before deploying to AWS, you can test your Terraform configuration locally:
+
+```bash
+# Quick test with automated script
+cd deployment
+./test-localstack.sh
+```
+
+This allows you to:
+- Validate Terraform syntax
+- Test resource dependencies
+- Catch errors before AWS deployment
+- No AWS costs
+
+See [LocalStack Testing Guide](LOCALSTACK_TESTING.md) for detailed instructions.
 
 ## Next Steps
 

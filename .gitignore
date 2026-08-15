@@ -15,6 +15,11 @@ terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/terraform.tfvars
 terraform/*.tfplan
+terraform/override.tf
+
+# LocalStack
+volume/
+.localstack/
 
 # SSH keys
 *.pem

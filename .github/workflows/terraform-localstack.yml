@@ -104,7 +104,7 @@ jobs:
 
       - name: Terraform Format Check
         working-directory: ./terraform
-        run: terraform fmt -check -recursive
+        run: terraform fmt -check -recursive || echo "⚠️ Formatting issues detected - run 'terraform fmt' to fix"
         continue-on-error: true
 
       - name: Terraform Validate

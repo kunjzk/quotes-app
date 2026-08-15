@@ -66,6 +66,10 @@ jobs:
           done
 
       - name: Verify LocalStack services
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           echo "Checking LocalStack health..."
           curl -s http://localhost:4566/_localstack/health | jq .
@@ -76,6 +80,10 @@ jobs:
               sts get-caller-identity || true
 
       - name: Initialize SES in LocalStack
+        env:
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           echo "Verifying test email in LocalStack SES..."
           aws --endpoint-url=http://localhost:4566 \

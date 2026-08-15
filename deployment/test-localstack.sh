@@ -58,7 +58,7 @@ fi
 
 # Create LocalStack provider override
 echo -e "${YELLOW}Creating LocalStack provider override...${NC}"
-cp provider-localstack.tf override.tf
+cp provider-localstack.tf.example override.tf
 
 # Initialize Terraform
 echo -e "${YELLOW}Initializing Terraform...${NC}"

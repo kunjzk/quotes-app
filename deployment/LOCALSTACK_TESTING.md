@@ -53,7 +53,7 @@ curl http://localhost:4566/_localstack/health
 cd terraform
 
 # Create provider override for LocalStack
-cp provider-localstack.tf override.tf
+cp provider-localstack.tf.example override.tf
 ```
 
 #### 3. Initialize and Test
@@ -256,11 +256,15 @@ docker-compose -f docker-compose.localstack.yml up -d
 # Verify LocalStack is healthy
 curl http://localhost:4566/_localstack/health
 
-# Check if override.tf is present
+# Check if override.tf was created
 ls -la terraform/override.tf
 
+# If missing, create it
+cd terraform
+cp provider-localstack.tf.example override.tf
+
 # Verify provider configuration
-cat terraform/override.tf
+cat override.tf
 ```
 
 ### "Resource Already Exists" Error

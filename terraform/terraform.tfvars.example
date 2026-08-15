@@ -1,0 +1,26 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+aws_region    = "us-east-1"
+project_name  = "quotesapp"
+instance_type = "t3.small"
+
+# Your IP address for SSH access (recommended to restrict this)
+# Get your IP: curl ifconfig.me
+ssh_allowed_ips = ["0.0.0.0/0"] # Change to ["YOUR.IP.ADDRESS/32"] for better security
+
+# Your SSH public key (contents of ~/.ssh/id_rsa.pub or similar)
+ssh_public_key = "ssh-rsa AAAAB3Nza... your-email@example.com"
+
+# Database password
+postgres_password = "your-secure-postgres-password"
+
+# Django secret key (generate with: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())")
+django_secret_key = "your-django-secret-key"
+
+# AWS SES Configuration
+# After verifying your email in SES, create SMTP credentials in the SES console
+ses_smtp_username  = "your-ses-smtp-username"
+ses_smtp_password  = "your-ses-smtp-password"
+ses_smtp_host      = "email-smtp.us-east-1.amazonaws.com" # Change region if needed
+ses_smtp_port      = 587
+default_from_email = "noreply@yourdomain.com" # Must be verified in SES

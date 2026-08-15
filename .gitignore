@@ -7,3 +7,16 @@ quotesapp/db.sqlite3
 .vscode/
 htmlcov/
 .coverage
+
+# Terraform
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/terraform.tfvars
+terraform/*.tfplan
+
+# SSH keys
+*.pem
+*.key
+id_rsa*

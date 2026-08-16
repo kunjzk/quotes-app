@@ -1,6 +1,18 @@
 # Quotes App
 
-## How to run locally
+A Django-based application for managing and organizing book quotes with scheduled email reminders.
+
+## Table of Contents
+
+- [Local Development](#local-development)
+- [AWS Deployment](#aws-deployment)
+- [Features](#features)
+- [Services](#services)
+- [Email Testing](#email-testing)
+
+## Local Development
+
+### How to run locally
 
 ```bash
 python3 -m venv venv
@@ -57,3 +69,62 @@ The app uses **MailHog** for local email testing. All emails sent by the applica
 3. Run MailHog for email testing
 4. Build app image locally & run it once all services are ready
 5. Creates a volume for postgres to persist data independently of container lifecycle
+
+## AWS Deployment
+
+For deploying to AWS with Terraform, see the comprehensive guide:
+
+📖 **[AWS Deployment Guide](deployment/AWS_DEPLOYMENT.md)**
+
+The deployment includes:
+- Complete infrastructure as code (Terraform)
+- Automated deployment scripts
+- AWS SES integration for email
+- systemd service for automatic startup
+- Production-ready Docker Compose configuration
+- LocalStack support for local testing
+
+### Quick Start
+
+**Test locally first (recommended):**
+```bash
+cd deployment
+./test-localstack.sh
+```
+
+**Then deploy to AWS:**
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
+terraform init
+terraform apply
+
+# Deploy the application
+cd ../deployment
+./deploy.sh <server-ip> ~/.ssh/your-key.pem
+```
+
+### Testing Infrastructure Locally
+
+Use LocalStack to test Terraform configurations locally before deploying to AWS:
+
+📖 **[LocalStack Testing Guide](deployment/LOCALSTACK_TESTING.md)**
+
+Benefits:
+- ✅ Test IaC without AWS costs
+- ✅ Validate Terraform syntax and dependencies
+- ✅ Iterate quickly on infrastructure changes
+- ✅ Catch errors before production deployment
+- ✅ **Automatic CI validation** on every PR
+
+## Features
+
+- User authentication and authorization
+- Quote management (create, read, update, soft delete)
+- Book management with automatic creation
+- Duplicate quote detection
+- Scheduled daily email reminders with random quotes
+- Background task processing with Celery
+- Admin panel for user and content management
+- Structured logging for key operations

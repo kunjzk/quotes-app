@@ -13,6 +13,8 @@ from django.db.models import Count, Q
 import logging
 import random
 import re
+import csv
+import io
 from .services import create_quote
 
 logger = logging.getLogger(__name__)
@@ -319,6 +321,118 @@ class BookSuggestView(LoginRequiredMixin, View):
         suggestions = [{'title': book.title, 'author': book.author} for book in books]
         
         return JsonResponse({'suggestions': suggestions})
+
+
+class BulkImportView(LoginRequiredMixin, TemplateView):
+    """Bulk import quotes from Readwise CSV."""
+    template_name = 'quotes/bulk_import.html'
+    
+    def post(self, request):
+        if 'csv_file' not in request.FILES:
+            return JsonResponse({'error': 'No file uploaded'}, status=400)
+        
+        csv_file = request.FILES['csv_file']
+        
+        # Validate file type
+        if not csv_file.name.endswith('.csv'):
+            return JsonResponse({'error': 'Please upload a CSV file'}, status=400)
+        
+        # Validate file size (max 10MB)
+        if csv_file.size > 10 * 1024 * 1024:
+            return JsonResponse({'error': 'File too large (max 10MB)'}, status=400)
+        
+        try:
+            # Read and parse CSV
+            file_data = csv_file.read().decode('utf-8')
+            csv_reader = csv.DictReader(io.StringIO(file_data))
+            
+            imported = 0
+            skipped = 0
+            errors = []
+            
+            for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (accounting for header)
+                try:
+                    result = self._import_quote(row, request.user)
+                    if result == 'imported':
+                        imported += 1
+                    elif result == 'skipped':
+                        skipped += 1
+                except Exception as e:
+                    errors.append(f"Row {row_num}: {str(e)[:100]}")
+                    if len(errors) >= 10:  # Limit error messages
+                        errors.append("... and more errors")
+                        break
+            
+            return JsonResponse({
+                'success': True,
+                'imported': imported,
+                'skipped': skipped,
+                'errors': errors
+            })
+            
+        except Exception as e:
+            logger.error(f"Bulk import error: {e}")
+            return JsonResponse({'error': f'Import failed: {str(e)}'}, status=500)
+    
+    def _import_quote(self, row, user):
+        """Import a single quote from CSV row."""
+        quote_text = row.get('Highlight', '').strip()
+        full_title = row.get('Book Title', '').strip()
+        author_str = row.get('Book Author', '').strip()
+        
+        if not quote_text or not full_title:
+            return 'skipped'
+        
+        # Clean book title and author
+        book_title = self._clean_book_title(full_title)
+        author = self._clean_author_name(author_str)
+        
+        # Get or create book
+        with transaction.atomic():
+            book, _ = Book.objects.get_or_create(
+                title=book_title,
+                author=author,
+                defaults={'title': book_title, 'author': author}
+            )
+            
+            # Check if quote already exists
+            if Quote.objects.filter(quote=quote_text, book=book, user=user).exists():
+                return 'skipped'
+            
+            # Create quote
+            Quote.objects.create(
+                quote=quote_text,
+                book=book,
+                user=user,
+                page_number=None
+            )
+        
+        return 'imported'
+    
+    def _clean_book_title(self, full_title):
+        """Extract clean book title from Readwise format."""
+        if ' - ' in full_title:
+            title = full_title.split(' - ', 1)[1]
+        else:
+            title = full_title
+        
+        if '(' in title:
+            title = re.sub(r'-[^-]+\([^)]+\)$', '', title)
+        
+        title = title.replace('_', ':').rstrip('-').strip()
+        return title
+    
+    def _clean_author_name(self, author_str):
+        """Convert 'Last, First' to 'First Last'."""
+        if not author_str:
+            return ''
+        
+        if ',' in author_str:
+            parts = author_str.split(',', 1)
+            if len(parts) == 2:
+                return f'{parts[1].strip()} {parts[0].strip()}'
+        
+        return author_str.strip()
 
 
 # Leaving here as a reference for the basic form view

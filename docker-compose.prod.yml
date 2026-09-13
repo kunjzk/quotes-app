@@ -59,6 +59,13 @@ services:
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      # Seeded on start by entrypoint.sh. Set these to override the weak
+      # defaults; passwords only apply when an account is first created.
+      APP_DOMAIN: ${APP_DOMAIN}
+      DJANGO_ADMIN_USERNAME: ${DJANGO_ADMIN_USERNAME:-admin}
+      DJANGO_ADMIN_PASSWORD: ${DJANGO_ADMIN_PASSWORD:-admin}
+      DJANGO_USER_USERNAME: ${DJANGO_USER_USERNAME:-kunal}
+      DJANGO_USER_PASSWORD: ${DJANGO_USER_PASSWORD:-kunal}
     restart: unless-stopped
   
   quotes-celery-worker:

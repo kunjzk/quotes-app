@@ -11,6 +11,10 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+RUN chmod +x /app/entrypoint.sh
+
 WORKDIR /app/quotesapp
+
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 CMD ["gunicorn", "quotesapp.wsgi:application", "--bind", "0.0.0.0:8000"]

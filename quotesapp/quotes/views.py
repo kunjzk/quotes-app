@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
-from django.views.generic import ListView, DetailView, CreateView, UpdateView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, TemplateView
 from .models import Quote, Book, User
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
@@ -8,7 +8,11 @@ from .forms import QuoteCreateForm
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
+from django.http import JsonResponse
+from django.db.models import Count, Q
 import logging
+import random
+import re
 from .services import create_quote
 
 logger = logging.getLogger(__name__)
@@ -122,6 +126,199 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
             }
         )
         return redirect("quotes:quotes_list")
+
+
+# Marginalia Views
+
+class TodayView(LoginRequiredMixin, TemplateView):
+    """Show today's 3 quotes - the same quotes throughout the day."""
+    template_name = 'quotes/today.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get user's quotes
+        user_quotes = Quote.objects.filter(user=self.request.user)
+        
+        # Select 3 random quotes (same seed per day for consistency)
+        today_seed = timezone.now().date().toordinal()
+        random.seed(today_seed + self.request.user.id)
+        
+        all_quotes = list(user_quotes)
+        if len(all_quotes) >= 3:
+            todays_quotes = random.sample(all_quotes, 3)
+        else:
+            todays_quotes = all_quotes
+        
+        # Calculate reading streak (days with quotes)
+        # Simple version: count total quotes / 3 (assuming 3 quotes per day)
+        streak = max(1, len(all_quotes) // 3)
+        
+        context['quotes'] = todays_quotes
+        context['streak'] = streak
+        context['total_quotes'] = len(all_quotes)
+        
+        return context
+
+
+class CaptureView(LoginRequiredMixin, TemplateView):
+    """Minimalist quote capture with inline attribution parsing."""
+    template_name = 'quotes/capture.html'
+    
+    def post(self, request):
+        content = request.POST.get('content', '').strip()
+        
+        if not content:
+            return JsonResponse({'error': 'Quote cannot be empty'}, status=400)
+        
+        # Parse the content: quote, then attribution line like "— walden p. 90"
+        # Pattern: everything before the last line starting with em dash or hyphen
+        lines = content.split('\n')
+        
+        attribution_line = None
+        quote_lines = lines
+        
+        # Check if last line is attribution (starts with — or -)
+        if lines and (lines[-1].strip().startswith('—') or lines[-1].strip().startswith('-')):
+            attribution_line = lines[-1].strip()
+            quote_lines = lines[:-1]
+        
+        quote_text = '\n'.join(quote_lines).strip()
+        
+        if not quote_text:
+            return JsonResponse({'error': 'Quote text cannot be empty'}, status=400)
+        
+        # Parse attribution: "— book p. 123" or "— book" or "— book | author"
+        book_title = None
+        author = None
+        page_number = None
+        
+        if attribution_line:
+            # Remove leading dashes
+            attr = attribution_line.lstrip('—-').strip()
+            
+            # Check for page number pattern: "p. 123" or "p.123" or "page 123"
+            page_match = re.search(r'(?:p\.?|page)\s*(\d+)', attr, re.IGNORECASE)
+            if page_match:
+                page_number = int(page_match.group(1))
+                # Remove page number from attribution
+                attr = re.sub(r'\s*(?:p\.?|page)\s*\d+', '', attr, flags=re.IGNORECASE).strip()
+            
+            # Check for author pattern: "book | author"
+            if '|' in attr:
+                parts = attr.split('|')
+                book_title = parts[0].strip()
+                author = parts[1].strip() if len(parts) > 1 else None
+            else:
+                book_title = attr
+        
+        # Try to find or create the book
+        book = None
+        if book_title:
+            # Try exact match first
+            book = Book.objects.filter(title__iexact=book_title).first()
+            
+            # If no book found and we have an author, create new book
+            if not book and author:
+                book = Book.objects.create(title=book_title, author=author)
+            elif not book:
+                # Just title, no author - create with empty author
+                book = Book.objects.create(title=book_title, author='')
+        
+        # Create the quote
+        try:
+            result = create_quote(
+                quote=quote_text,
+                book=book,
+                title=book_title or '',
+                author=author or '',
+                page_number=page_number,
+                user=request.user
+            )
+            
+            if result.status == "success" or result.status == "quote_exists":
+                quote_id = result.existing_quote_id if result.status == "quote_exists" else Quote.objects.filter(user=request.user).latest('created_at').id
+                return JsonResponse({
+                    'success': True,
+                    'quote_id': quote_id,
+                    'message': 'Quote saved' if result.status == "success" else 'Quote already exists'
+                })
+            else:
+                return JsonResponse({'error': result.error_message}, status=400)
+                
+        except Exception as e:
+            logger.error(f"Error creating quote: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+
+
+class ShelfView(LoginRequiredMixin, TemplateView):
+    """Visual bookshelf showing all books as colored spines."""
+    template_name = 'quotes/shelf.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get all books that have quotes from this user
+        books = Book.objects.filter(
+            quote__user=self.request.user
+        ).annotate(
+            quote_count=Count('quote', filter=Q(quote__user=self.request.user))
+        ).filter(quote_count__gt=0).distinct().order_by('-quote_count', 'title')
+        
+        # Assign colors to books (cycle through 6 colors)
+        colors = ['spine-color-1', 'spine-color-2', 'spine-color-3', 
+                  'spine-color-4', 'spine-color-5', 'spine-color-6']
+        
+        books_with_colors = []
+        for i, book in enumerate(books):
+            books_with_colors.append({
+                'book': book,
+                'color': colors[i % len(colors)],
+                'height': min(300, 80 + (book.quote_count * 20))  # Height based on quote count
+            })
+        
+        context['books'] = books_with_colors
+        context['total_books'] = len(books)
+        context['total_passages'] = sum(b['book'].quote_count for b in books_with_colors)
+        
+        return context
+
+
+class BookQuotesView(LoginRequiredMixin, TemplateView):
+    """HTMX endpoint: return quotes for a specific book."""
+    template_name = 'quotes/partials/book_quotes.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        book_id = self.kwargs.get('pk')
+        
+        book = get_object_or_404(Book, pk=book_id)
+        quotes = Quote.objects.filter(book=book, user=self.request.user).order_by('page_number')
+        
+        context['book'] = book
+        context['quotes'] = quotes
+        
+        return context
+
+
+class BookSuggestView(LoginRequiredMixin, View):
+    """HTMX endpoint: suggest books as user types."""
+    
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return JsonResponse({'suggestions': []})
+        
+        # Get books that have quotes from this user
+        books = Book.objects.filter(
+            quote__user=request.user,
+            title__icontains=query
+        ).distinct()[:5]
+        
+        suggestions = [{'title': book.title, 'author': book.author} for book in books]
+        
+        return JsonResponse({'suggestions': suggestions})
 
 
 # Leaving here as a reference for the basic form view

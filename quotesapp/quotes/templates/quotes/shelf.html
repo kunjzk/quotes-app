@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Shelf · Marginalia{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="mb-12">
+            <h1 class="text-3xl font-semibold mb-4">Shelf</h1>
+            <p class="italic" style="color: var(--grey);">
+                Spine height is quote count. Pull a book to open it.
+            </p>
+            
+            <div class="mt-6 font-mono text-sm uppercase tracking-wide" style="color: var(--grey);">
+                {{ total_books }} book{{ total_books|pluralize }} · {{ total_passages }} passage{{ total_passages|pluralize }}
+            </div>
+        </div>
+        
+        {% if books %}
+            <div class="flex flex-col lg:flex-row gap-8">
+                <!-- Bookshelf -->
+                <div class="lg:w-1/2">
+                    <div class="flex items-end justify-start space-x-2 pb-4 border-b-4" style="border-color: var(--ink);">
+                        {% for book_data in books %}
+                        <button
+                            class="book-spine {{ book_data.color }} relative cursor-pointer transition-all hover:opacity-80 hover:-translate-y-1"
+                            style="width: 60px; height: {{ book_data.height }}px; writing-mode: vertical-rl; text-orientation: mixed;"
+                            hx-get="{% url 'quotes:book_quotes' book_data.book.id %}"
+                            hx-target="#book-detail"
+                            hx-swap="innerHTML"
+                            onclick="selectBook(this, {{ forloop.counter0 }})"
+                            data-book-index="{{ forloop.counter0 }}"
+                        >
+                            <span class="text-white font-semibold text-sm px-2 py-2 block truncate" title="{{ book_data.book.title }}">
+                                {{ book_data.book.title }}
+                            </span>
+                            <span class="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-white font-mono text-xs opacity-75">
+                                {{ book_data.book.quote_count }}
+                            </span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <!-- Book Detail (slides out) -->
+                <div class="lg:w-1/2">
+                    <div id="book-detail" class="transition-all duration-300">
+                        <div class="text-center py-16" style="color: var(--grey);">
+                            <p class="italic">Select a book to view its passages</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <!-- Empty State -->
+            <div class="text-center py-16">
+                <p class="text-xl mb-8" style="color: var(--grey);">
+                    Your shelf is empty. Start capturing quotes to build your library.
+                </p>
+                <a href="{% url 'quotes:capture' %}" 
+                   class="inline-block px-6 py-3 bg-teal text-white font-mono text-sm uppercase tracking-wide hover:opacity-90 transition-opacity">
+                    Capture your first quote
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    let selectedBookIndex = -1;
+    
+    function selectBook(spine, index) {
+        // Remove previous selection
+        document.querySelectorAll('.book-spine').forEach(s => {
+            s.style.transform = '';
+            s.style.marginLeft = '';
+        });
+        
+        // Highlight selected book (slide out slightly)
+        spine.style.transform = 'translateY(-8px) translateX(10px)';
+        selectedBookIndex = index;
+    }
+</script>
+{% endblock %}

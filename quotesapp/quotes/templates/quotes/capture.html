@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block title %}Capture · Marginalia{% endblock %}
+
+{% block content %}
+<div class="h-full flex items-center justify-center p-8">
+    <div class="max-w-3xl w-full">
+        <!-- Header -->
+        <div class="mb-12">
+            <h1 class="text-3xl font-semibold mb-4">Capture</h1>
+            <p class="italic" style="color: var(--grey);">
+                One sheet, no form fields. The attribution line parses as you type.
+            </p>
+        </div>
+        
+        <!-- Capture Form -->
+        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8" style="background-color: var(--paper); border: 1px solid var(--ink); opacity: 0.95;">
+            <form id="capture-form" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Success Message -->
+                <div id="success-message" class="hidden p-4 mb-4 rounded" style="background-color: var(--teal); color: var(--paper);">
+                    <p class="font-mono text-sm">✓ Quote saved</p>
+                </div>
+                
+                <!-- Error Message -->
+                <div id="error-message" class="hidden p-4 mb-4 rounded" style="background-color: #dc2626; color: white;">
+                    <p class="font-mono text-sm"></p>
+                </div>
+                
+                <!-- Quote Input -->
+                <div>
+                    <label class="font-mono text-xs uppercase tracking-wide mb-2 block" style="color: var(--grey);">
+                        NEW PASSAGE
+                    </label>
+                    <textarea
+                        id="quote-input"
+                        name="content"
+                        rows="8"
+                        class="w-full p-4 text-xl leading-relaxed border-none focus:outline-none focus:ring-0 resize-none"
+                        style="background-color: transparent; color: var(--ink);"
+                        placeholder="I went to the woods because I wished to live deliberately, to front only the essential facts of life.
+
+— walden | Henry David Thoreau | p. 90"
+                        autofocus
+                    ></textarea>
+                </div>
+                
+                <!-- Helper Text -->
+                <div class="text-sm italic" style="color: var(--grey);">
+                    <p>End with an attribution line like:</p>
+                    <ul class="list-disc list-inside ml-4 mt-2 space-y-1 font-mono text-xs">
+                        <li>— walden p. 90</li>
+                        <li>— meditations | Marcus Aurelius</li>
+                        <li>— The Great Gatsby | F. Scott Fitzgerald | p. 180</li>
+                    </ul>
+                </div>
+                
+                <!-- Book Suggestion (shown when typing) -->
+                <div id="book-suggestion" class="hidden p-4 rounded" style="background-color: var(--paper); border: 1px solid var(--teal);">
+                    <p class="font-mono text-sm mb-2" style="color: var(--grey);">
+                        + new book "<span id="suggested-title"></span>"
+                    </p>
+                </div>
+                
+                <!-- Submit Button -->
+                <div class="flex justify-between items-center pt-4">
+                    <button
+                        type="button"
+                        onclick="clearForm()"
+                        class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
+                        style="color: var(--grey);"
+                    >
+                        clear
+                    </button>
+                    
+                    <button
+                        type="submit"
+                        id="save-button"
+                        class="px-8 py-3 font-mono text-sm uppercase tracking-wide text-white transition-all hover:opacity-90"
+                        style="background-color: var(--teal);"
+                    >
+                        Underline & save ↵
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('capture-form');
+    const input = document.getElementById('quote-input');
+    const saveButton = document.getElementById('save-button');
+    const successMessage = document.getElementById('success-message');
+    const errorMessage = document.getElementById('error-message');
+    const bookSuggestion = document.getElementById('book-suggestion');
+    const suggestedTitle = document.getElementById('suggested-title');
+    
+    // Parse attribution as user types
+    input.addEventListener('input', () => {
+        const content = input.value;
+        const lines = content.split('\n');
+        
+        if (lines.length > 0) {
+            const lastLine = lines[lines.length - 1].trim();
+            
+            // Check if last line looks like attribution
+            if (lastLine.startsWith('—') || lastLine.startsWith('-')) {
+                const attr = lastLine.replace(/^[—\-]\s*/, '');
+                const bookMatch = attr.split(/\s*\|\s*/)[0].replace(/\s*p\.\s*\d+/, '').trim();
+                
+                if (bookMatch && bookMatch.length > 2) {
+                    suggestedTitle.textContent = bookMatch;
+                    bookSuggestion.classList.remove('hidden');
+                } else {
+                    bookSuggestion.classList.add('hidden');
+                }
+            } else {
+                bookSuggestion.classList.add('hidden');
+            }
+        }
+    });
+    
+    // Handle form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const content = input.value.trim();
+        
+        if (!content) {
+            showError('Please enter a quote');
+            return;
+        }
+        
+        // Disable button during submission
+        saveButton.disabled = true;
+        saveButton.style.opacity = '0.5';
+        saveButton.textContent = 'Saving...';
+        
+        try {
+            const response = await fetch('{% url "quotes:capture" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                },
+                body: new URLSearchParams({
+                    content: content
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                // Show success with ink underline animation
+                showSuccess();
+                
+                // Add ink underline animation to the textarea
+                input.classList.add('ink-underline');
+                
+                // Clear form after short delay
+                setTimeout(() => {
+                    clearForm();
+                    input.classList.remove('ink-underline');
+                }, 1500);
+            } else {
+                showError(data.error || 'Failed to save quote');
+            }
+        } catch (error) {
+            showError('Network error. Please try again.');
+        } finally {
+            // Re-enable button
+            saveButton.disabled = false;
+            saveButton.style.opacity = '1';
+            saveButton.textContent = 'Underline & save ↵';
+        }
+    });
+    
+    // Keyboard shortcut: Cmd/Ctrl + Enter to submit
+    input.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit'));
+        }
+    });
+    
+    function showSuccess() {
+        successMessage.classList.remove('hidden');
+        errorMessage.classList.add('hidden');
+        
+        setTimeout(() => {
+            successMessage.classList.add('hidden');
+        }, 3000);
+    }
+    
+    function showError(message) {
+        errorMessage.querySelector('p').textContent = message;
+        errorMessage.classList.remove('hidden');
+        successMessage.classList.add('hidden');
+    }
+    
+    function clearForm() {
+        input.value = '';
+        bookSuggestion.classList.add('hidden');
+        successMessage.classList.add('hidden');
+        errorMessage.classList.add('hidden');
+        input.focus();
+    }
+</script>
+{% endblock %}

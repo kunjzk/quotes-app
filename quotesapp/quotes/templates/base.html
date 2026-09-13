@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Marginalia{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Marginalia Color Palette */
+        :root {
+            --paper: #e8ebe8;
+            --paper-dark: #2a2e2a;
+            --ink: #1a2332;
+            --ink-dark: #e8ebe8;
+            --teal: #2d6a6a;
+            --teal-dark: #3d8a8a;
+            --grey: #6b7280;
+        }
+        
+        .dark {
+            --paper: var(--paper-dark);
+            --ink: var(--ink-dark);
+            --teal: var(--teal-dark);
+        }
+        
+        body {
+            font-family: 'Newsreader', serif;
+            background-color: var(--paper);
+            color: var(--ink);
+        }
+        
+        .font-mono {
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        
+        .text-teal {
+            color: var(--teal);
+        }
+        
+        .bg-teal {
+            background-color: var(--teal);
+        }
+        
+        .border-teal {
+            border-color: var(--teal);
+        }
+        
+        /* Page turn animation */
+        .page-fade-enter {
+            animation: fadeIn 0.6s ease-in;
+        }
+        
+        .page-fade-exit {
+            animation: fadeOut 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(-20px); }
+        }
+        
+        /* Ink underline animation */
+        .ink-underline {
+            position: relative;
+        }
+        
+        .ink-underline::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background-color: var(--teal);
+            animation: drawUnderline 0.8s ease-out forwards;
+        }
+        
+        @keyframes drawUnderline {
+            to { width: 100%; }
+        }
+        
+        /* Book spine colors */
+        .spine-color-1 { background-color: #7c4e3d; }
+        .spine-color-2 { background-color: #5a6b4a; }
+        .spine-color-3 { background-color: #b8985f; }
+        .spine-color-4 { background-color: #3d4e6b; }
+        .spine-color-5 { background-color: #4a6b6b; }
+        .spine-color-6 { background-color: #7c5a4e; }
+        
+        /* Wax seal */
+        .wax-seal {
+            width: 32px;
+            height: 32px;
+            background: var(--teal);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--paper);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="h-full">
+    <!-- Navigation -->
+    <nav class="fixed top-0 left-0 right-0 z-50 border-b" style="background-color: var(--paper); border-color: var(--ink); opacity: 0.95;">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-8">
+                    <h1 class="text-xl font-semibold italic">Marginalia</h1>
+                    <div class="flex space-x-6 font-mono text-sm uppercase tracking-wide">
+                        <a href="{% url 'quotes:today' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'today' %}text-teal{% endif %}">today</a>
+                        <a href="{% url 'quotes:shelf' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'shelf' %}text-teal{% endif %}">shelf</a>
+                        <a href="{% url 'quotes:capture' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'capture' %}text-teal{% endif %}">capture</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">{{ request.user.first_name|default:request.user.username }}</span>
+                    <a href="{% url 'admin:index' %}" class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors">admin</a>
+                    <form method="post" action="{% url 'logout' %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors">logout</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <main class="pt-16 h-full">
+        {% block content %}{% endblock %}
+    </main>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

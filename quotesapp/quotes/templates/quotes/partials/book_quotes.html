@@ -1,0 +1,71 @@
+<div class="space-y-6 animate-slide-in">
+    <!-- Book Header -->
+    <div class="mb-8 pb-4 border-b" style="border-color: var(--ink); opacity: 0.2;">
+        <h2 class="text-2xl font-semibold mb-2">{{ book.title }}</h2>
+        {% if book.author %}
+        <p class="italic" style="color: var(--grey);">{{ book.author }}</p>
+        {% endif %}
+        <p class="font-mono text-xs uppercase tracking-wide mt-2" style="color: var(--grey);">
+            {{ quotes.count }} passage{{ quotes.count|pluralize }}
+        </p>
+    </div>
+    
+    <!-- Quotes List -->
+    <div class="space-y-8">
+        {% for quote in quotes %}
+        <div class="flex items-start space-x-6">
+            <!-- Page Number (Margin) -->
+            {% if quote.page_number %}
+            <div class="w-12 flex-shrink-0 pt-1">
+                <span class="font-mono text-sm" style="color: var(--grey);">
+                    {{ quote.page_number }}
+                </span>
+            </div>
+            {% endif %}
+            
+            <!-- Quote Text -->
+            <div class="flex-1">
+                <blockquote class="text-lg leading-relaxed mb-2">
+                    {{ quote.quote }}
+                </blockquote>
+                
+                <!-- Actions -->
+                <div class="flex space-x-4 mt-2">
+                    <a href="{% url 'quotes:quote_edit' quote.id %}" 
+                       class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors"
+                       style="color: var(--grey);">
+                        edit
+                    </a>
+                    <form method="post" action="{% url 'quotes:quote_delete' quote.id %}" 
+                          class="inline"
+                          onsubmit="return confirm('Delete this quote?');">
+                        {% csrf_token %}
+                        <button type="submit" 
+                                class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors"
+                                style="color: var(--grey);">
+                            delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+    @keyframes slide-in {
+        from {
+            opacity: 0;
+            transform: translateX(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    .animate-slide-in {
+        animation: slide-in 0.3s ease-out;
+    }
+</style>

@@ -50,32 +50,33 @@
                             </blockquote>
                         </div>
                     </div>
-                    
-                    <!-- Navigation -->
-                    <div class="mt-16 flex justify-between items-center">
-                        <button 
-                            class="prev-button font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
-                            {% if forloop.first %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
-                            ← prev
-                        </button>
-                        
-                        <div class="flex space-x-2">
-                            {% for q in quotes %}
-                            <div class="page-indicator w-2 h-2 rounded-full transition-all"
-                                 data-page="{{ forloop.counter0 }}"
-                                 style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
-                            </div>
-                            {% endfor %}
-                        </div>
-                        
-                        <button 
-                            class="next-button font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors turn-button"
-                            {% if forloop.last %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
-                            turn →
-                        </button>
-                    </div>
                 </div>
                 {% endfor %}
+            </div>
+            
+            <!-- Global Navigation (outside quote pages) -->
+            <div class="mt-16 flex justify-between items-center">
+                <button 
+                    id="prev-button"
+                    class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
+                    style="opacity: 0.3; cursor: not-allowed;">
+                    ← prev
+                </button>
+                
+                <div class="flex space-x-2">
+                    {% for quote in quotes %}
+                    <div class="page-indicator w-2 h-2 rounded-full transition-all"
+                         data-page="{{ forloop.counter0 }}"
+                         style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <button 
+                    id="next-button"
+                    class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors">
+                    turn →
+                </button>
             </div>
             
             <!-- Total Count -->
@@ -112,7 +113,7 @@
         });
         
         // Show target page with animation
-        const targetPage = document.querySelector(`[data-page="${pageIndex}"]`);
+        const targetPage = document.querySelector(`.quote-page[data-page="${pageIndex}"]`);
         if (targetPage) {
             targetPage.classList.remove('hidden');
             targetPage.classList.add('active', 'page-fade-enter');
@@ -127,6 +128,34 @@
                     indicator.style.opacity = '0.3';
                 }
             });
+            
+            // Update button states
+            const prevBtn = document.getElementById('prev-button');
+            const nextBtn = document.getElementById('next-button');
+            
+            if (prevBtn) {
+                if (pageIndex === 0) {
+                    prevBtn.style.opacity = '0.3';
+                    prevBtn.style.cursor = 'not-allowed';
+                    prevBtn.disabled = true;
+                } else {
+                    prevBtn.style.opacity = '1';
+                    prevBtn.style.cursor = 'pointer';
+                    prevBtn.disabled = false;
+                }
+            }
+            
+            if (nextBtn) {
+                if (pageIndex === totalPages - 1) {
+                    nextBtn.style.opacity = '0.3';
+                    nextBtn.style.cursor = 'not-allowed';
+                    nextBtn.disabled = true;
+                } else {
+                    nextBtn.style.opacity = '1';
+                    nextBtn.style.cursor = 'pointer';
+                    nextBtn.disabled = false;
+                }
+            }
             
             currentPage = pageIndex;
         }
@@ -146,23 +175,24 @@
     
     // Add event listeners for navigation buttons
     document.addEventListener('DOMContentLoaded', function() {
-        // Next buttons
-        document.querySelectorAll('.next-button').forEach(btn => {
-            btn.addEventListener('click', nextPage);
-            btn.addEventListener('touchend', function(e) {
+        const nextBtn = document.getElementById('next-button');
+        const prevBtn = document.getElementById('prev-button');
+        
+        if (nextBtn) {
+            nextBtn.addEventListener('click', nextPage);
+            nextBtn.addEventListener('touchend', function(e) {
                 e.preventDefault();
                 nextPage();
             });
-        });
+        }
         
-        // Previous buttons
-        document.querySelectorAll('.prev-button').forEach(btn => {
-            btn.addEventListener('click', previousPage);
-            btn.addEventListener('touchend', function(e) {
+        if (prevBtn) {
+            prevBtn.addEventListener('click', previousPage);
+            prevBtn.addEventListener('touchend', function(e) {
                 e.preventDefault();
                 previousPage();
             });
-        });
+        }
     });
     
     // Keyboard navigation

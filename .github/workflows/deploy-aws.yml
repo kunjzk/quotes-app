@@ -200,9 +200,31 @@ jobs:
           sudo docker compose -f docker-compose.prod.yml pull
           sudo docker compose -f docker-compose.prod.yml run --rm quotes-app \
             python manage.py migrate --noinput
-          sudo systemctl reload-or-restart quotesapp
+
+          # Recreate containers directly. Going through systemctl is not
+          # reliable here: reload-or-restart on a Type=oneshot unit left the
+          # old containers running while still reporting success.
+          sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          sudo systemctl enable quotesapp
           sudo docker image prune -f
           REMOTE
+
+      # A deploy that silently keeps the old container still serves HTTP 200,
+      # so assert on the image actually running.
+      - name: Verify deployed image
+        env:
+          EXPECTED: ${{ needs.image.outputs.image }}
+        run: |
+          for svc in quotes-app quotes-celery-worker quotes-celery-beat; do
+            ACTUAL=$(ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=no \
+              ubuntu@${{ steps.target.outputs.ip }} \
+              "sudo docker inspect quotesapp-${svc}-1 --format '{{.Config.Image}}'" | tr -d '[:space:]')
+            if [ "$ACTUAL" != "$EXPECTED" ]; then
+              echo "::error::$svc runs $ACTUAL but expected $EXPECTED"
+              exit 1
+            fi
+            echo "  $svc -> $ACTUAL"
+          done
 
       - name: Smoke test
         run: |

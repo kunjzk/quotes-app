@@ -1,0 +1,267 @@
+{% extends 'base.html' %}
+
+{% block title %}Import · Marginalia{% endblock %}
+
+{% block content %}
+<div class="min-h-screen p-8">
+    <div class="max-w-3xl mx-auto">
+        <!-- Header -->
+        <div class="mb-12">
+            <h1 class="text-3xl font-semibold mb-4">Import from Readwise</h1>
+            <p class="italic" style="color: var(--grey);">
+                Upload your Readwise CSV export to bulk import your highlights.
+            </p>
+        </div>
+        
+        <!-- Upload Form -->
+        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mb-8" style="background-color: var(--paper); border: 1px solid var(--ink); opacity: 0.95;">
+            <form id="import-form" enctype="multipart/form-data" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- File Upload -->
+                <div>
+                    <label class="block font-mono text-xs uppercase tracking-wide mb-4" style="color: var(--grey);">
+                        Select Readwise CSV File
+                    </label>
+                    
+                    <div class="border-2 border-dashed rounded-lg p-8 text-center transition-colors hover:border-teal"
+                         style="border-color: var(--ink); opacity: 0.5;"
+                         id="drop-zone">
+                        <input 
+                            type="file" 
+                            id="csv-file" 
+                            name="csv_file" 
+                            accept=".csv"
+                            class="hidden"
+                        >
+                        <label for="csv-file" class="cursor-pointer">
+                            <div class="mb-4">
+                                <svg class="mx-auto h-12 w-12" style="color: var(--grey);" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <p class="font-mono text-sm mb-2" style="color: var(--grey);">
+                                Click to upload or drag and drop
+                            </p>
+                            <p class="font-mono text-xs" style="color: var(--grey); opacity: 0.7;">
+                                CSV file (max 10MB)
+                            </p>
+                        </label>
+                    </div>
+                    
+                    <!-- Selected File Display -->
+                    <div id="file-info" class="hidden mt-4 p-4 rounded" style="background-color: var(--paper); border: 1px solid var(--teal);">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <svg class="h-6 w-6 text-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                </svg>
+                                <div>
+                                    <p id="file-name" class="font-mono text-sm"></p>
+                                    <p id="file-size" class="font-mono text-xs" style="color: var(--grey);"></p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="clearFile()" class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors" style="color: var(--grey);">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div id="progress-container" class="hidden">
+                    <div class="mb-2 flex justify-between">
+                        <span class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">Importing...</span>
+                        <span id="progress-text" class="font-mono text-xs" style="color: var(--grey);"></span>
+                    </div>
+                    <div class="w-full h-2 rounded" style="background-color: var(--ink); opacity: 0.2;">
+                        <div id="progress-bar" class="h-full rounded bg-teal transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                
+                <!-- Results -->
+                <div id="results" class="hidden"></div>
+                
+                <!-- Submit Button -->
+                <div class="flex justify-between items-center pt-4">
+                    <a href="{% url 'quotes:today' %}" class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors" style="color: var(--grey);">
+                        ← back
+                    </a>
+                    
+                    <button
+                        type="submit"
+                        id="import-button"
+                        class="px-8 py-3 font-mono text-sm uppercase tracking-wide text-white transition-all hover:opacity-90 disabled:opacity-50"
+                        style="background-color: var(--teal);"
+                        disabled
+                    >
+                        Import quotes ↑
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="space-y-4" style="color: var(--grey);">
+            <h3 class="font-mono text-sm uppercase tracking-wide">How to export from Readwise:</h3>
+            <ol class="list-decimal list-inside space-y-2 ml-4">
+                <li>Go to <a href="https://readwise.io/export" target="_blank" class="text-teal hover:underline">readwise.io/export</a></li>
+                <li>Click "Export all data"</li>
+                <li>Download the CSV file</li>
+                <li>Upload it here</li>
+            </ol>
+            <p class="text-sm italic mt-4">
+                Note: Readwise doesn't export page numbers, so imported quotes won't have page numbers.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    const fileInput = document.getElementById('csv-file');
+    const fileInfo = document.getElementById('file-info');
+    const fileName = document.getElementById('file-name');
+    const fileSize = document.getElementById('file-size');
+    const importButton = document.getElementById('import-button');
+    const form = document.getElementById('import-form');
+    const progressContainer = document.getElementById('progress-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const results = document.getElementById('results');
+    const dropZone = document.getElementById('drop-zone');
+    
+    // File input change
+    fileInput.addEventListener('change', handleFileSelect);
+    
+    // Drag and drop
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--teal)';
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = 'var(--ink)';
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--ink)';
+        
+        if (e.dataTransfer.files.length) {
+            fileInput.files = e.dataTransfer.files;
+            handleFileSelect();
+        }
+    });
+    
+    function handleFileSelect() {
+        const file = fileInput.files[0];
+        if (file) {
+            fileName.textContent = file.name;
+            fileSize.textContent = formatBytes(file.size);
+            fileInfo.classList.remove('hidden');
+            importButton.disabled = false;
+        }
+    }
+    
+    function clearFile() {
+        fileInput.value = '';
+        fileInfo.classList.add('hidden');
+        importButton.disabled = true;
+    }
+    
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    }
+    
+    // Form submission
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const file = fileInput.files[0];
+        if (!file) return;
+        
+        // Disable button
+        importButton.disabled = true;
+        importButton.textContent = 'Importing...';
+        
+        // Show progress
+        progressContainer.classList.remove('hidden');
+        progressBar.style.width = '10%';
+        results.classList.add('hidden');
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('csv_file', file);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        try {
+            progressBar.style.width = '50%';
+            
+            const response = await fetch('{% url "quotes:bulk_import" %}', {
+                method: 'POST',
+                body: formData
+            });
+            
+            progressBar.style.width = '100%';
+            
+            const data = await response.json();
+            
+            if (response.ok && data.success) {
+                showResults(data);
+            } else {
+                showError(data.error || 'Import failed');
+            }
+        } catch (error) {
+            showError('Network error: ' + error.message);
+        } finally {
+            importButton.disabled = false;
+            importButton.textContent = 'Import quotes ↑';
+            setTimeout(() => {
+                progressContainer.classList.add('hidden');
+            }, 1000);
+        }
+    });
+    
+    function showResults(data) {
+        results.innerHTML = `
+            <div class="p-6 rounded space-y-4" style="background-color: var(--teal); color: var(--paper);">
+                <h3 class="font-mono text-sm uppercase tracking-wide">✓ Import Complete</h3>
+                <div class="space-y-2 font-mono text-sm">
+                    <p>Imported: ${data.imported} quotes</p>
+                    <p>Skipped: ${data.skipped} duplicates</p>
+                    ${data.errors.length > 0 ? `<p style="color: #fbbf24;">Errors: ${data.errors.length}</p>` : ''}
+                </div>
+                ${data.errors.length > 0 ? `
+                    <details class="mt-4">
+                        <summary class="cursor-pointer font-mono text-xs uppercase tracking-wide">View errors</summary>
+                        <ul class="mt-2 space-y-1 font-mono text-xs">
+                            ${data.errors.map(e => `<li>• ${e}</li>`).join('')}
+                        </ul>
+                    </details>
+                ` : ''}
+                <div class="mt-6">
+                    <a href="{% url 'quotes:today' %}" class="inline-block px-6 py-3 font-mono text-sm uppercase tracking-wide transition-opacity hover:opacity-80" style="background-color: var(--paper); color: var(--teal);">
+                        View your quotes →
+                    </a>
+                </div>
+            </div>
+        `;
+        results.classList.remove('hidden');
+        clearFile();
+    }
+    
+    function showError(message) {
+        results.innerHTML = `
+            <div class="p-6 rounded" style="background-color: #dc2626; color: white;">
+                <h3 class="font-mono text-sm uppercase tracking-wide mb-2">✗ Import Failed</h3>
+                <p class="font-mono text-sm">${message}</p>
+            </div>
+        `;
+        results.classList.remove('hidden');
+    }
+</script>
+{% endblock %}

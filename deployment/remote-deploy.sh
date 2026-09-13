@@ -18,7 +18,14 @@ compose() {
 sudo install -o root -g root -m 644 /tmp/docker-compose.prod.yml "$DEPLOY_DIR/docker-compose.prod.yml"
 sudo install -o root -g root -m 600 /tmp/env.rendered "$DEPLOY_DIR/.env"
 sudo install -o root -g root -m 644 /tmp/quotesapp.service /etc/systemd/system/quotesapp.service
-rm -f /tmp/env.rendered
+sudo install -o root -g root -m 644 /tmp/Caddyfile "$DEPLOY_DIR/Caddyfile"
+
+# Origin keypair. Caddy runs as root in the container, so 600 is readable.
+sudo install -d -o root -g root -m 700 "$DEPLOY_DIR/tls"
+sudo install -o root -g root -m 644 /tmp/origin.pem "$DEPLOY_DIR/tls/origin.pem"
+sudo install -o root -g root -m 600 /tmp/origin.key "$DEPLOY_DIR/tls/origin.key"
+
+rm -f /tmp/env.rendered /tmp/origin.pem /tmp/origin.key
 sudo systemctl daemon-reload
 
 cd "$DEPLOY_DIR"

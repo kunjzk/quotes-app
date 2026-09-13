@@ -34,8 +34,24 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG_MODE', 'False').lower() == 'true'
 
-# TODO: Change to specific hosts in production
-ALLOWED_HOSTS = ['*']
+# Comma-separated list, e.g. "readreadread.xyz,www.readreadread.xyz".
+# Falls back to permissive only in DEBUG so local development is unaffected.
+_allowed = os.getenv('DJANGO_ALLOWED_HOSTS', '')
+ALLOWED_HOSTS = [h.strip() for h in _allowed.split(',') if h.strip()] or (
+    ['*'] if DEBUG else []
+)
+
+# Cloudflare and Caddy terminate TLS, so the original scheme only survives in
+# this header. Without it Django treats requests as HTTP and CSRF checks on
+# secure-origin form posts fail.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Django 4+ requires the scheme here, so it cannot be derived from ALLOWED_HOSTS.
+CSRF_TRUSTED_ORIGINS = [f'https://{h}' for h in ALLOWED_HOSTS if h != '*']
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 # Application definition

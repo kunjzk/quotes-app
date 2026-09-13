@@ -30,12 +30,19 @@ This guide walks you through deploying the Quotes App to AWS using Terraform.
 │  └───────────────────────────────────────┘ │
 └─────────────────────────────────────────────┘
                      │
-                     ├─ Port 22 (SSH)
-                     └─ Port 8000 (HTTP)
-                     
+                     ├─ Port 22 (SSH, allowlisted IPs only)
+                     └─ Ports 80/443 (Cloudflare ranges only)
+
 External Services:
+  ├─ Cloudflare (DNS, TLS to the browser, proxy)
   └─ AWS SES (Email)
 ```
+
+Gunicorn is not published to the host. Caddy holds 80/443, terminates TLS
+using a Cloudflare Origin CA certificate, and proxies to `quotes-app:8000`
+over the compose network. The security group only admits Cloudflare's
+published ranges on 80/443, so the origin cannot be reached directly and
+Cloudflare cannot be bypassed. Cloudflare must be set to Full (strict).
 
 ## Prerequisites
 
@@ -152,7 +159,7 @@ Type `yes` when prompted. This will take 2-3 minutes.
 After completion, Terraform will output:
 ```
 public_ip = "54.123.45.67"
-app_url = "http://54.123.45.67:8000"
+app_url = "https://example.com"
 ssh_command = "ssh -i ~/.ssh/your-key.pem ubuntu@54.123.45.67"
 ```
 
@@ -237,14 +244,18 @@ docker-compose exec quotes-app python manage.py createsuperuser
 
 ## Step 6: Verify Deployment
 
-1. **Check the app is running:**
+1. **Check the app is running.** The origin only accepts connections from
+   Cloudflare, so test from the instance itself:
    ```bash
-   curl http://<server-ip>:8000
+   ssh ubuntu@<server-ip> \
+     "curl -sk --resolve <domain>:443:127.0.0.1 https://<domain>/ -o /dev/null -w '%{http_code}\n'"
    ```
+   `-k` is expected: the Origin CA certificate is trusted by Cloudflare, not
+   by system trust stores.
 
 2. **Visit in browser:**
    ```
-   http://<server-ip>:8000
+   https://<domain>
    ```
 
 3. **Login and test email:**
@@ -319,11 +330,18 @@ docker-compose logs -f quotes-celery-beat
 - Verify you're using the correct SSH key
 - Check the instance is running: `aws ec2 describe-instances`
 
-### Issue: App not loading on port 8000
+### Issue: Site not loading
 
-- Check security group allows 0.0.0.0/0 on port 8000
-- Verify containers are running: `docker-compose ps`
-- Check logs: `docker-compose logs quotes-app`
+- `docker compose -f docker-compose.prod.yml ps` — are `quotes-caddy` and
+  `quotes-app` both up?
+- Cloudflare 521/522 means the edge cannot reach the origin: check the
+  security group still covers Cloudflare's current ranges (they change
+  occasionally; refresh `cloudflare_ipv4_cidrs` from
+  `https://api.cloudflare.com/client/v4/ips`)
+- A redirect loop means Cloudflare is set to Flexible; it must be Full (strict)
+- `DisallowedHost` in the app logs means `DJANGO_ALLOWED_HOSTS` is missing the
+  hostname being requested
+- Caddy logs: `docker compose -f docker-compose.prod.yml logs quotes-caddy`
 
 ### Issue: Emails not sending
 

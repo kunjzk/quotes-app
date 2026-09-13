@@ -84,13 +84,23 @@ resource "aws_security_group" "quotesapp" {
     cidr_blocks = var.ssh_allowed_ips
   }
 
-  # Django app
+  # Cloudflare terminates TLS for browsers and connects to Caddy here. Only
+  # Cloudflare's published ranges are admitted, so the origin cannot be
+  # reached directly and Cloudflare cannot be bypassed.
   ingress {
-    description = "Django app"
-    from_port   = 8000
-    to_port     = 8000
+    description = "HTTPS from Cloudflare"
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = var.cloudflare_ipv4_cidrs
+  }
+
+  ingress {
+    description = "HTTP from Cloudflare (redirects to HTTPS)"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = var.cloudflare_ipv4_cidrs
   }
 
   # MailHog UI (optional, for debugging)
@@ -142,13 +152,13 @@ resource "aws_instance" "quotesapp" {
   }
 
   user_data = templatefile("${path.module}/user-data.sh", {
-    postgres_password     = var.postgres_password
-    django_secret_key     = var.django_secret_key
-    ses_smtp_username     = var.ses_smtp_username
-    ses_smtp_password     = var.ses_smtp_password
-    ses_smtp_host         = var.ses_smtp_host
-    ses_smtp_port         = var.ses_smtp_port
-    default_from_email    = var.default_from_email
+    postgres_password  = var.postgres_password
+    django_secret_key  = var.django_secret_key
+    ses_smtp_username  = var.ses_smtp_username
+    ses_smtp_password  = var.ses_smtp_password
+    ses_smtp_host      = var.ses_smtp_host
+    ses_smtp_port      = var.ses_smtp_port
+    default_from_email = var.default_from_email
   })
 
   iam_instance_profile = aws_iam_instance_profile.quotesapp.name

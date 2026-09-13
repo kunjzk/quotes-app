@@ -91,6 +91,7 @@ jobs:
           TF_VAR_ses_smtp_username: ${{ secrets.SES_SMTP_USERNAME }}
           TF_VAR_ses_smtp_password: ${{ secrets.SES_SMTP_PASSWORD }}
           TF_VAR_default_from_email: ${{ secrets.DEFAULT_FROM_EMAIL }}
+          TF_VAR_app_domain: ${{ secrets.APP_DOMAIN }}
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
@@ -153,13 +154,16 @@ jobs:
           SES_SMTP_USERNAME: ${{ secrets.SES_SMTP_USERNAME }}
           SES_SMTP_PASSWORD: ${{ secrets.SES_SMTP_PASSWORD }}
           DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
         run: |
           umask 077
           cat > env.rendered <<EOF
           QUOTES_IMAGE=${QUOTES_IMAGE}
+          APP_DOMAIN=${APP_DOMAIN}
 
           DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
           DJANGO_DEBUG_MODE=False
+          DJANGO_ALLOWED_HOSTS=${APP_DOMAIN},www.${APP_DOMAIN}
 
           POSTGRES_NAME=quotesapp
           POSTGRES_USER=postgres
@@ -184,9 +188,13 @@ jobs:
         env:
           HOST: ubuntu@${{ steps.target.outputs.ip }}
         run: |
+          printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_CERT }}" > origin.pem
+          printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_KEY }}" > origin.key
+
           scp -i ~/.ssh/deploy.pem \
             docker-compose.prod.yml deployment/quotesapp.service \
-            deployment/remote-deploy.sh env.rendered \
+            deployment/remote-deploy.sh deployment/Caddyfile \
+            env.rendered origin.pem origin.key \
             "$HOST:/tmp/"
 
           # -n keeps the local stdin closed; the script is a file on the
@@ -211,20 +219,37 @@ jobs:
             echo "  $svc -> $ACTUAL"
           done
 
-      - name: Smoke test
+      # Runs on the instance because the security group only admits
+      # Cloudflare on 443. -k is required: the origin certificate is issued
+      # by Cloudflare's Origin CA, which no system trust store contains.
+      - name: Smoke test origin
+        env:
+          DOMAIN: ${{ secrets.APP_DOMAIN }}
         run: |
           for i in $(seq 1 10); do
-            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
-              "http://${{ steps.target.outputs.ip }}:8000/" || echo 000)
+            CODE=$(ssh -n -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=no \
+              ubuntu@${{ steps.target.outputs.ip }} \
+              "curl -sk -o /dev/null -w '%{http_code}' --max-time 10 \
+                 --resolve ${DOMAIN}:443:127.0.0.1 https://${DOMAIN}/" || echo 000)
             if [ "$CODE" = "200" ]; then
-              echo "App healthy (HTTP 200) after ${i} attempt(s)"
+              echo "Origin healthy (HTTP 200) after ${i} attempt(s)"
               exit 0
             fi
             echo "attempt $i: HTTP $CODE, retrying..."
             sleep 6
           done
-          echo "::error::App did not return HTTP 200"
+          echo "::error::Origin did not return HTTP 200"
           exit 1
+
+      # Non-fatal: DNS or Cloudflare settings can lag behind a deploy.
+      - name: Smoke test through Cloudflare
+        continue-on-error: true
+        env:
+          DOMAIN: ${{ secrets.APP_DOMAIN }}
+        run: |
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${DOMAIN}/" || echo 000)
+          echo "https://${DOMAIN}/ -> HTTP $CODE"
+          [ "$CODE" = "200" ] || echo "::warning::Public URL returned $CODE"
 
       - name: Container status
         if: always()

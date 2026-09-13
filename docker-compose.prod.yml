@@ -16,10 +16,29 @@ services:
     image: redis:latest
     restart: unless-stopped
   
+  # TLS terminator. Cloudflare is the only thing that should reach this,
+  # enforced by the security group.
+  quotes-caddy:
+    image: caddy:2-alpine
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./tls:/etc/caddy/tls:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    depends_on:
+      - quotes-app
+    restart: unless-stopped
+
+  # No host port mapping: reachable only via Caddy on the compose network.
   quotes-app:
     image: ${QUOTES_IMAGE:-ghcr.io/kunjzk/quotes-app:latest}
-    ports:
-      - 8000:8000
+    expose:
+      - 8000
     depends_on:
       - quotes-postgres
       - quotes-redis
@@ -31,6 +50,7 @@ services:
       POSTGRES_PORT: 5432
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
       CELERY_BROKER_URL: redis://quotes-redis:6379
       EMAIL_BACKEND: ${EMAIL_BACKEND}
       EMAIL_HOST: ${EMAIL_HOST}
@@ -55,6 +75,7 @@ services:
       POSTGRES_PORT: 5432
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
       CELERY_BROKER_URL: redis://quotes-redis:6379
       EMAIL_BACKEND: ${EMAIL_BACKEND}
       EMAIL_HOST: ${EMAIL_HOST}
@@ -79,6 +100,7 @@ services:
       POSTGRES_PORT: 5432
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
       DJANGO_DEBUG_MODE: ${DJANGO_DEBUG_MODE}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
       CELERY_BROKER_URL: redis://quotes-redis:6379
       EMAIL_BACKEND: ${EMAIL_BACKEND}
       EMAIL_HOST: ${EMAIL_HOST}
@@ -91,3 +113,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

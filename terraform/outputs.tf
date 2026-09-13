@@ -9,8 +9,8 @@ output "public_ip" {
 }
 
 output "app_url" {
-  description = "Application URL"
-  value       = "http://${aws_eip.quotesapp.public_ip}:8000"
+  description = "Public application URL, served through Cloudflare"
+  value       = "https://${var.app_domain}"
 }
 
 output "ssh_command" {

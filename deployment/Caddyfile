@@ -1,0 +1,29 @@
+# Terminates TLS using the Cloudflare Origin CA certificate and proxies to
+# Gunicorn. Cloudflare is in Full (strict) mode, so it validates this
+# certificate; it is only trusted by Cloudflare, never by browsers directly.
+
+{
+	# Origin certs are not publicly trusted, so there is no ACME account to
+	# manage and no email to register.
+	auto_https disable_certs
+	admin off
+}
+
+{$APP_DOMAIN}, www.{$APP_DOMAIN} {
+	tls /etc/caddy/tls/origin.pem /etc/caddy/tls/origin.key
+
+	# Cloudflare terminates the browser leg, so the client's real address and
+	# scheme arrive in headers. Django needs these to build correct URLs and
+	# to know the request was HTTPS.
+	reverse_proxy quotes-app:8000 {
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+	}
+
+	encode zstd gzip
+
+	log {
+		output stderr
+		format console
+	}
+}

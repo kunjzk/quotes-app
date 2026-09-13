@@ -184,30 +184,15 @@ jobs:
         env:
           HOST: ubuntu@${{ steps.target.outputs.ip }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=yes"
           scp -i ~/.ssh/deploy.pem \
-            docker-compose.prod.yml deployment/quotesapp.service env.rendered \
+            docker-compose.prod.yml deployment/quotesapp.service \
+            deployment/remote-deploy.sh env.rendered \
             "$HOST:/tmp/"
 
-          $SSH "$HOST" bash -euo pipefail <<'REMOTE'
-          sudo install -o root -g root -m 644 /tmp/docker-compose.prod.yml /opt/quotesapp/docker-compose.prod.yml
-          sudo install -o root -g root -m 600 /tmp/env.rendered /opt/quotesapp/.env
-          sudo install -o root -g root -m 644 /tmp/quotesapp.service /etc/systemd/system/quotesapp.service
-          rm -f /tmp/env.rendered
-          sudo systemctl daemon-reload
-
-          cd /opt/quotesapp
-          sudo docker compose -f docker-compose.prod.yml pull
-          sudo docker compose -f docker-compose.prod.yml run --rm quotes-app \
-            python manage.py migrate --noinput
-
-          # Recreate containers directly. Going through systemctl is not
-          # reliable here: reload-or-restart on a Type=oneshot unit left the
-          # old containers running while still reporting success.
-          sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
-          sudo systemctl enable quotesapp
-          sudo docker image prune -f
-          REMOTE
+          # -n keeps the local stdin closed; the script is a file on the
+          # remote side so nothing can consume it mid-run.
+          ssh -n -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=yes "$HOST" \
+            'bash /tmp/remote-deploy.sh'
 
       # A deploy that silently keeps the old container still serves HTTP 200,
       # so assert on the image actually running.

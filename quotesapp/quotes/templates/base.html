@@ -135,7 +135,6 @@
     <nav class="fixed top-0 left-0 right-0 z-50 border-b" style="background-color: var(--paper); border-color: var(--ink); opacity: 0.95;">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
-<<<<<<< HEAD
                 <div class="flex items-center space-x-4 sm:space-x-8 min-w-0 flex-1">
                     <h1 class="text-xl font-semibold italic flex-shrink-0">ReadReadRead</h1>
                     <div class="flex space-x-4 sm:space-x-6 font-mono text-sm uppercase tracking-wide overflow-x-auto scrollbar-hide flex-nowrap">
@@ -143,15 +142,6 @@
                         <a href="{% url 'quotes:shelf' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'shelf' %}text-teal{% endif %}">shelf</a>
                         <a href="{% url 'quotes:capture' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'capture' %}text-teal{% endif %}">capture</a>
                         <a href="{% url 'quotes:bulk_import' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'bulk_import' %}text-teal{% endif %}">import</a>
-=======
-                <div class="flex items-center space-x-8">
-                    <h1 class="text-xl font-semibold italic">Marginalia</h1>
-                    <div class="flex space-x-6 font-mono text-sm uppercase tracking-wide">
-                        <a href="{% url 'quotes:today' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'today' %}text-teal{% endif %}">today</a>
-                        <a href="{% url 'quotes:shelf' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'shelf' %}text-teal{% endif %}">shelf</a>
-                        <a href="{% url 'quotes:capture' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'capture' %}text-teal{% endif %}">capture</a>
-                        <a href="{% url 'quotes:bulk_import' %}" class="hover:text-teal transition-colors {% if request.resolver_match.url_name == 'bulk_import' %}text-teal{% endif %}">import</a>
->>>>>>> origin/main
                     </div>
                 </div>
                 <div class="hidden sm:flex items-center space-x-4 flex-shrink-0">

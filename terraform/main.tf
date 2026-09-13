@@ -1,11 +1,16 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.11"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
   }
+
+  # Partial config: bucket and key come from backend.hcl locally
+  # (gitignored) and from -backend-config flags in CI, so account
+  # identifiers stay out of this public repo.
+  backend "s3" {}
 }
 
 provider "aws" {

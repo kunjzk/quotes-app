@@ -8,6 +8,11 @@
 # 3. Run terraform: terraform init && terraform apply -var-file="localstack.tfvars"
 # 4. Clean up: rm override.tf when done
 
+# Keeps LocalStack state on disk instead of the real S3 backend in main.tf
+terraform {
+  backend "local" {}
+}
+
 provider "aws" {
   region                      = var.aws_region
   access_key                  = "test"

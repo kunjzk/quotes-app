@@ -1,7 +1,7 @@
 variable "aws_region" {
   description = "AWS region to deploy to"
   type        = string
-  default     = "us-east-1"
+  default     = "ap-southeast-1"
 }
 
 variable "project_name" {
@@ -56,7 +56,7 @@ variable "ses_smtp_password" {
 variable "ses_smtp_host" {
   description = "AWS SES SMTP host"
   type        = string
-  default     = "email-smtp.us-east-1.amazonaws.com"
+  default     = "email-smtp.ap-southeast-1.amazonaws.com"
 }
 
 variable "ses_smtp_port" {

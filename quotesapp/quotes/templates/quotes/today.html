@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+
+{% block title %}Today · Marginalia{% endblock %}
+
+{% block content %}
+<div class="h-full flex items-center justify-center p-8">
+    <div class="max-w-3xl w-full">
+        {% if quotes %}
+            <!-- Reading Streak -->
+            <div class="flex justify-end mb-8">
+                <div class="wax-seal" title="{{ streak }} day streak">
+                    {{ streak }}
+                </div>
+            </div>
+            
+            <!-- Quote Pages -->
+            <div id="quote-container" class="relative min-h-[400px]">
+                {% for quote in quotes %}
+                <div class="quote-page {% if forloop.first %}active{% else %}hidden{% endif %}" 
+                     data-page="{{ forloop.counter0 }}"
+                     data-total="{{ quotes|length }}">
+                    
+                    <!-- Book Title Header -->
+                    <div class="mb-8 pb-4 border-b" style="border-color: var(--ink); opacity: 0.2;">
+                        <h2 class="text-sm font-mono uppercase tracking-wide" style="color: var(--grey);">
+                            {{ quote.book.title }}
+                        </h2>
+                        {% if quote.book.author %}
+                        <p class="text-xs font-mono italic" style="color: var(--grey);">
+                            {{ quote.book.author }}
+                        </p>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Quote with Page Number in Margin -->
+                    <div class="flex items-start space-x-8">
+                        <!-- Page Number (Margin) -->
+                        {% if quote.page_number %}
+                        <div class="w-12 flex-shrink-0 pt-1">
+                            <span class="font-mono text-sm" style="color: var(--grey);">
+                                {{ quote.page_number }}
+                            </span>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Quote Text -->
+                        <div class="flex-1">
+                            <blockquote class="text-2xl leading-relaxed">
+                                {{ quote.quote }}
+                            </blockquote>
+                        </div>
+                    </div>
+                    
+                    <!-- Navigation -->
+                    <div class="mt-16 flex justify-between items-center">
+                        <button onclick="previousPage()" 
+                                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
+                                {% if forloop.first %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
+                            ← prev
+                        </button>
+                        
+                        <div class="flex space-x-2">
+                            {% for q in quotes %}
+                            <div class="page-indicator w-2 h-2 rounded-full transition-all"
+                                 data-page="{{ forloop.counter0 }}"
+                                 style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <button onclick="nextPage()" 
+                                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors turn-button"
+                                {% if forloop.last %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
+                            turn →
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <!-- Total Count -->
+            <div class="mt-12 text-center">
+                <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
+                    {{ total_quotes }} passage{{ total_quotes|pluralize }}
+                </p>
+            </div>
+            
+        {% else %}
+            <!-- Empty State -->
+            <div class="text-center py-16">
+                <p class="text-xl mb-8" style="color: var(--grey);">
+                    No quotes yet. Start capturing your passages.
+                </p>
+                <a href="{% url 'quotes:capture' %}" 
+                   class="inline-block px-6 py-3 bg-teal text-white font-mono text-sm uppercase tracking-wide hover:opacity-90 transition-opacity">
+                    Capture your first quote
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    let currentPage = 0;
+    const totalPages = {{ quotes|length }};
+    
+    function showPage(pageIndex) {
+        // Hide all pages
+        document.querySelectorAll('.quote-page').forEach(page => {
+            page.classList.add('hidden');
+            page.classList.remove('active', 'page-fade-enter');
+        });
+        
+        // Show target page with animation
+        const targetPage = document.querySelector(`[data-page="${pageIndex}"]`);
+        if (targetPage) {
+            targetPage.classList.remove('hidden');
+            targetPage.classList.add('active', 'page-fade-enter');
+            
+            // Update indicators
+            document.querySelectorAll('.page-indicator').forEach((indicator, idx) => {
+                if (idx === pageIndex) {
+                    indicator.style.backgroundColor = 'var(--teal)';
+                    indicator.style.opacity = '1';
+                } else {
+                    indicator.style.backgroundColor = 'var(--grey)';
+                    indicator.style.opacity = '0.3';
+                }
+            });
+            
+            currentPage = pageIndex;
+        }
+    }
+    
+    function nextPage() {
+        if (currentPage < totalPages - 1) {
+            showPage(currentPage + 1);
+        }
+    }
+    
+    function previousPage() {
+        if (currentPage > 0) {
+            showPage(currentPage - 1);
+        }
+    }
+    
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight') {
+            nextPage();
+        } else if (e.key === 'ArrowLeft') {
+            previousPage();
+        }
+    });
+</script>
+{% endblock %}

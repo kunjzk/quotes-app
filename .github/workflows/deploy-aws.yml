@@ -1,0 +1,235 @@
+name: Deploy to AWS
+
+# Manual only, and runnable from any branch. Note that workflow_dispatch
+# only appears in the Actions UI once this file exists on the default
+# branch; after that the ref dropdown lets you deploy any branch.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm'
+        required: true
+        type: string
+      apply_infra:
+        description: 'Also run terraform apply (infrastructure changes)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-southeast-1
+  INSTANCE_TAG: quotesapp-instance
+  SECURITY_GROUP_NAME: quotesapp-sg
+  DEPLOY_DIR: /opt/quotesapp
+
+jobs:
+  image:
+    name: Build and push image
+    if: inputs.confirm == 'deploy'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image reference
+        id: meta
+        run: echo "image=ghcr.io/${{ github.repository_owner }}/quotes-app:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagged with the commit SHA so any branch can be deployed, unlike
+      # docker.yml which only publishes :latest from main.
+      - name: Build and push
+        run: |
+          docker build -t "${{ steps.meta.outputs.image }}" .
+          docker push "${{ steps.meta.outputs.image }}"
+
+  deploy:
+    name: Deploy to EC2
+    needs: image
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # The deploy role trusts only the "production" environment subject,
+      # so this step fails if the environment is missing on the repo.
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        if: inputs.apply_infra
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.11.3
+
+      - name: Terraform apply
+        if: inputs.apply_infra
+        working-directory: ./terraform
+        env:
+          TF_VAR_ssh_public_key: ${{ secrets.SSH_PUBLIC_KEY }}
+          TF_VAR_ssh_allowed_ips: ${{ secrets.SSH_ALLOWED_IPS }}
+          TF_VAR_postgres_password: ${{ secrets.POSTGRES_PASSWORD }}
+          TF_VAR_django_secret_key: ${{ secrets.DJANGO_SECRET_KEY }}
+          TF_VAR_ses_smtp_username: ${{ secrets.SES_SMTP_USERNAME }}
+          TF_VAR_ses_smtp_password: ${{ secrets.SES_SMTP_PASSWORD }}
+          TF_VAR_default_from_email: ${{ secrets.DEFAULT_FROM_EMAIL }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+            -backend-config="key=quotesapp/terraform.tfstate" \
+            -backend-config="region=${{ env.AWS_REGION }}" \
+            -backend-config="encrypt=true" \
+            -backend-config="use_lockfile=true"
+          terraform apply -auto-approve
+
+      # Looked up by tag rather than Terraform outputs so the common path
+      # needs no state access.
+      - name: Resolve target instance
+        id: target
+        run: |
+          IP=$(aws ec2 describe-instances \
+            --filters "Name=tag:Name,Values=${INSTANCE_TAG}" \
+                      "Name=instance-state-name,Values=running" \
+            --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+          SG=$(aws ec2 describe-security-groups \
+            --filters "Name=group-name,Values=${SECURITY_GROUP_NAME}" \
+            --query 'SecurityGroups[0].GroupId' --output text)
+
+          if [ -z "$IP" ] || [ "$IP" = "None" ]; then
+            echo "::error::No running instance tagged ${INSTANCE_TAG} found"
+            exit 1
+          fi
+          if [ -z "$SG" ] || [ "$SG" = "None" ]; then
+            echo "::error::Security group ${SECURITY_GROUP_NAME} not found"
+            exit 1
+          fi
+
+          echo "ip=$IP" >> "$GITHUB_OUTPUT"
+          echo "sg=$SG" >> "$GITHUB_OUTPUT"
+          echo "Deploying to $IP via $SG"
+
+      # Runners have no stable egress IP, so open 22 just for this run.
+      - name: Open SSH for this runner
+        id: sshwindow
+        run: |
+          CIDR="$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')/32"
+          echo "cidr=$CIDR" >> "$GITHUB_OUTPUT"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "${{ steps.target.outputs.sg }}" \
+            --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=$CIDR,Description=github-actions-${{ github.run_id }}}]"
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy.pem
+          chmod 600 ~/.ssh/deploy.pem
+          ssh-keyscan -H "${{ steps.target.outputs.ip }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Secrets live here rather than in Terraform user-data, which is
+      # readable from instance metadata and only executes on first boot.
+      - name: Render environment file
+        env:
+          QUOTES_IMAGE: ${{ needs.image.outputs.image }}
+          DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SES_SMTP_USERNAME: ${{ secrets.SES_SMTP_USERNAME }}
+          SES_SMTP_PASSWORD: ${{ secrets.SES_SMTP_PASSWORD }}
+          DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
+        run: |
+          umask 077
+          cat > env.rendered <<EOF
+          QUOTES_IMAGE=${QUOTES_IMAGE}
+
+          DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
+          DJANGO_DEBUG_MODE=False
+
+          POSTGRES_NAME=quotesapp
+          POSTGRES_USER=postgres
+          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+          POSTGRES_HOST=quotes-postgres
+          POSTGRES_PORT=5432
+
+          EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+          EMAIL_HOST=email-smtp.${AWS_REGION}.amazonaws.com
+          EMAIL_PORT=587
+          EMAIL_USE_TLS=True
+          EMAIL_HOST_USER=${SES_SMTP_USERNAME}
+          EMAIL_HOST_PASSWORD=${SES_SMTP_PASSWORD}
+          DEFAULT_FROM_EMAIL=${DEFAULT_FROM_EMAIL}
+
+          CELERY_BROKER_URL=redis://quotes-redis:6379
+          EOF
+
+      # Only compose config and the env file ship; application code is
+      # baked into the image.
+      - name: Deploy
+        env:
+          HOST: ubuntu@${{ steps.target.outputs.ip }}
+        run: |
+          SSH="ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=yes"
+          scp -i ~/.ssh/deploy.pem \
+            docker-compose.prod.yml deployment/quotesapp.service env.rendered \
+            "$HOST:/tmp/"
+
+          $SSH "$HOST" bash -euo pipefail <<'REMOTE'
+          sudo install -o root -g root -m 644 /tmp/docker-compose.prod.yml /opt/quotesapp/docker-compose.prod.yml
+          sudo install -o root -g root -m 600 /tmp/env.rendered /opt/quotesapp/.env
+          sudo install -o root -g root -m 644 /tmp/quotesapp.service /etc/systemd/system/quotesapp.service
+          rm -f /tmp/env.rendered
+          sudo systemctl daemon-reload
+
+          cd /opt/quotesapp
+          sudo docker compose -f docker-compose.prod.yml pull
+          sudo docker compose -f docker-compose.prod.yml run --rm quotes-app \
+            python manage.py migrate --noinput
+          sudo systemctl reload-or-restart quotesapp
+          sudo docker image prune -f
+          REMOTE
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+              "http://${{ steps.target.outputs.ip }}:8000/" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "App healthy (HTTP 200) after ${i} attempt(s)"
+              exit 0
+            fi
+            echo "attempt $i: HTTP $CODE, retrying..."
+            sleep 6
+          done
+          echo "::error::App did not return HTTP 200"
+          exit 1
+
+      - name: Container status
+        if: always()
+        run: |
+          ssh -i ~/.ssh/deploy.pem -o StrictHostKeyChecking=no \
+            ubuntu@${{ steps.target.outputs.ip }} \
+            "sudo docker compose -f ${DEPLOY_DIR}/docker-compose.prod.yml --project-directory ${DEPLOY_DIR} ps" || true
+
+      - name: Revoke SSH access
+        if: always() && steps.sshwindow.outputs.cidr != ''
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id "${{ steps.target.outputs.sg }}" \
+            --protocol tcp --port 22 \
+            --cidr "${{ steps.sshwindow.outputs.cidr }}" || true

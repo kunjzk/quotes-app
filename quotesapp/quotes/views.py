@@ -4,7 +4,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, T
 from .models import Quote, Book, User
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
-from .forms import QuoteCreateForm
+from .forms import QuoteCreateForm, UserRegistrationForm
 from django.utils import timezone
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
@@ -433,6 +433,32 @@ class BulkImportView(LoginRequiredMixin, TemplateView):
                 return f'{parts[1].strip()} {parts[0].strip()}'
         
         return author_str.strip()
+
+
+class RegisterView(CreateView):
+    """User registration view."""
+    template_name = 'registration/register.html'
+    form_class = UserRegistrationForm
+    success_url = reverse_lazy('quotes:today')
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Log the user in after registration
+        login(self.request, self.object)
+        return response
+
+
+class RegisterView(CreateView):
+    """User registration view."""
+    template_name = 'registration/register.html'
+    form_class = UserRegistrationForm
+    success_url = reverse_lazy('quotes:today')
+    
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        # Log the user in after registration
+        login(self.request, self.object)
+        return response
 
 
 # Leaving here as a reference for the basic form view

@@ -53,9 +53,9 @@
                     
                     <!-- Navigation -->
                     <div class="mt-16 flex justify-between items-center">
-                        <button onclick="previousPage()" 
-                                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
-                                {% if forloop.first %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
+                        <button 
+                            class="prev-button font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
+                            {% if forloop.first %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
                             ← prev
                         </button>
                         
@@ -68,9 +68,9 @@
                             {% endfor %}
                         </div>
                         
-                        <button onclick="nextPage()" 
-                                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors turn-button"
-                                {% if forloop.last %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
+                        <button 
+                            class="next-button font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors turn-button"
+                            {% if forloop.last %}disabled style="opacity: 0.3; cursor: not-allowed;"{% endif %}>
                             turn →
                         </button>
                     </div>
@@ -144,6 +144,27 @@
         }
     }
     
+    // Add event listeners for navigation buttons
+    document.addEventListener('DOMContentLoaded', function() {
+        // Next buttons
+        document.querySelectorAll('.next-button').forEach(btn => {
+            btn.addEventListener('click', nextPage);
+            btn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                nextPage();
+            });
+        });
+        
+        // Previous buttons
+        document.querySelectorAll('.prev-button').forEach(btn => {
+            btn.addEventListener('click', previousPage);
+            btn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                previousPage();
+            });
+        });
+    });
+    
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight') {
@@ -152,5 +173,36 @@
             previousPage();
         }
     });
+    
+    // Swipe support for mobile
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    const container = document.getElementById('quote-container');
+    if (container) {
+        container.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+        
+        container.addEventListener('touchend', (e) => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+    }
+    
+    function handleSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0) {
+                // Swiped left - go to next page
+                nextPage();
+            } else {
+                // Swiped right - go to previous page
+                previousPage();
+            }
+        }
+    }
 </script>
 {% endblock %}

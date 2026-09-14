@@ -15,6 +15,7 @@ urlpatterns = [
     # HTMX endpoints
     path("api/book/<int:pk>/quotes/", views.BookQuotesView.as_view(), name="book_quotes"),
     path("api/book/suggest/", views.BookSuggestView.as_view(), name="book_suggest"),
+    path("api/author/suggest/", views.AuthorSuggestView.as_view(), name="author_suggest"),
     
     # Legacy views (keep for admin/compatibility)
     path("list/", views.QuotesListView.as_view(), name="quotes_list"),

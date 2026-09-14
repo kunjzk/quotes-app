@@ -324,6 +324,26 @@ class BookSuggestView(LoginRequiredMixin, View):
         return JsonResponse({'suggestions': suggestions})
 
 
+class AuthorSuggestView(LoginRequiredMixin, View):
+    """API endpoint: suggest authors as user types."""
+    
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return JsonResponse({'suggestions': []})
+        
+        # Get unique authors from books that have quotes from this user
+        authors = Book.objects.filter(
+            quote__user=request.user,
+            author__icontains=query
+        ).values_list('author', flat=True).distinct()[:5]
+        
+        suggestions = [{'author': author} for author in authors if author]
+        
+        return JsonResponse({'suggestions': suggestions})
+
+
 class BulkImportView(LoginRequiredMixin, TemplateView):
     """Bulk import quotes from Readwise CSV."""
     template_name = 'quotes/bulk_import.html'

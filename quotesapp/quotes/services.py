@@ -1,10 +1,13 @@
-from quotes.models import Quote, Book, User
+from quotes.models import Quote, Book, User, TodayPreference, TodaySelection
 from django.db import transaction, DataError, IntegrityError, DatabaseError
+from django.db.models import QuerySet
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 import logging
+import math
+import random
 
 logger = logging.getLogger(__name__)
 
@@ -110,3 +113,161 @@ def find_quotes_and_send_email(user_id: int) -> None:
         message += f"{quote.page_number}\n"
     message += "\n\nSee you tomorrow!\n\nBest regards,\nThe Quotes App"
     send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
+
+
+# --- Today screen -----------------------------------------------------------
+
+# A quote that has never been shown is weighted as though it was last shown
+# this many days ago, so it is strongly (but not exclusively) preferred.
+NEVER_SHOWN_DAYS = 365
+
+# Values a user can type into a blank to mean "no filter".
+ANY_VALUES = {"", "any", "anyone", "all"}
+
+
+def normalize_criteria_value(value: str | None) -> str:
+    value = (value or "").strip()
+    if value.casefold() in ANY_VALUES:
+        return ""
+    return value[:255]
+
+
+def get_today_preference(user: User) -> TodayPreference:
+    preference, _ = TodayPreference.objects.get_or_create(user=user)
+    return preference
+
+
+def update_today_preference(user: User, quote_count: int, author: str | None, book_title: str | None) -> TodayPreference:
+    """Persist the user's Today criteria. Raises ValidationError on bad input."""
+    preference = get_today_preference(user)
+    preference.quote_count = quote_count
+    preference.author = normalize_criteria_value(author)
+    preference.book_title = normalize_criteria_value(book_title)
+    preference.full_clean()
+    preference.save()
+    logger.info(
+        "Today preference updated",
+        extra={"user_id": user.id, "criteria": preference.criteria_key},
+    )
+    return preference
+
+
+def _filter_field(queryset: QuerySet, field: str, value: str) -> QuerySet:
+    """
+    Case-insensitive exact match on `field`; if nothing matches exactly, fall
+    back to a substring match so a partially typed value still narrows results.
+    """
+    value = (value or "").strip()
+    if not value:
+        return queryset
+    exact = queryset.filter(**{f"{field}__iexact": value})
+    if exact.exists():
+        return exact
+    return queryset.filter(**{f"{field}__icontains": value})
+
+
+def filter_quotes_for_today(user: User, author: str = "", book_title: str = "") -> QuerySet[Quote]:
+    """Narrow the user's quotes to the chosen author and/or book ("" means any)."""
+    quotes = Quote.objects.filter(user=user).select_related("book")
+    quotes = _filter_field(quotes, "book__author", author)
+    quotes = _filter_field(quotes, "book__title", book_title)
+    return quotes
+
+
+def recency_weight(quote: Quote, now) -> float:
+    """Higher for quotes never shown or shown long ago; 1 for quotes shown today."""
+    if quote.last_shown_at is None:
+        return NEVER_SHOWN_DAYS + 1
+    days = max(0, (now - quote.last_shown_at).days)
+    return min(days, NEVER_SHOWN_DAYS) + 1
+
+
+def pick_quotes(candidates, count: int, now=None, rng=None) -> list[Quote]:
+    """
+    Weighted random sample without replacement (Efraimidis-Spirakis): each
+    candidate gets key u^(1/weight) and the `count` largest keys win. Quotes
+    that are new or stale therefore win far more often than recently shown ones.
+    """
+    if count <= 0:
+        return []
+    now = now or timezone.now()
+    rng = rng or random
+    keyed = [
+        (math.pow(rng.random(), 1.0 / recency_weight(quote, now)), quote)
+        for quote in candidates
+    ]
+    keyed.sort(key=lambda pair: pair[0], reverse=True)
+    return [quote for _, quote in keyed[:count]]
+
+
+def _ordered_by_ids(queryset: QuerySet[Quote], ids: list[int]) -> list[Quote]:
+    by_id = queryset.in_bulk(ids)
+    return [by_id[quote_id] for quote_id in ids if quote_id in by_id]
+
+
+def get_todays_quotes(user: User, preference: TodayPreference | None = None, now=None, rng=None) -> list[Quote]:
+    """
+    Quotes for the user's Today screen.
+
+    The pick is made once per day per set of criteria and reused afterwards so
+    the screen is stable across reloads. Whenever new quotes are picked their
+    `last_shown_at` is stamped, which feeds the recency bias on later days.
+    """
+    now = now or timezone.now()
+    today = timezone.localdate(now)
+    preference = preference or get_today_preference(user)
+    candidates = filter_quotes_for_today(user, preference.author, preference.book_title)
+
+    selection = TodaySelection.objects.filter(user=user).first()
+    cache_hit = (
+        selection is not None
+        and selection.date == today
+        and selection.criteria_key == preference.criteria_key
+    )
+    picked = _ordered_by_ids(candidates, selection.quote_ids) if cache_hit else []
+
+    # Top up when this is a fresh pick, or when cached quotes have since been
+    # deleted / no longer match.
+    missing = preference.quote_count - len(picked)
+    extra = []
+    if missing > 0:
+        remaining = candidates.exclude(id__in=[quote.id for quote in picked])
+        extra = pick_quotes(remaining, missing, now=now, rng=rng)
+        if extra:
+            Quote.objects.filter(id__in=[quote.id for quote in extra]).update(last_shown_at=now)
+            for quote in extra:
+                quote.last_shown_at = now
+            picked.extend(extra)
+
+    if not cache_hit or extra:
+        TodaySelection.objects.update_or_create(
+            user=user,
+            defaults={
+                "date": today,
+                "criteria_key": preference.criteria_key,
+                "quote_ids": [quote.id for quote in picked],
+            },
+        )
+    return picked
+
+
+def suggest_today_values(user: User, field: str, query: str = "", author: str = "", book_title: str = "", limit: int = 8) -> list[str]:
+    """
+    Autocomplete values for the Today criteria blanks, drawn only from books
+    the user has quotes in. The other blank (if filled) narrows the results,
+    e.g. choosing an author only suggests that author's books.
+    """
+    books = Book.objects.filter(quote__user=user, quote__deleted_at__isnull=True)
+    query = (query or "").strip()
+
+    if field == "author":
+        books = _filter_field(books, "title", normalize_criteria_value(book_title))
+        values = books.exclude(author="").filter(author__icontains=query).values_list("author", flat=True)
+        return list(values.order_by("author").distinct()[:limit])
+
+    if field == "book":
+        books = _filter_field(books, "author", normalize_criteria_value(author))
+        values = books.filter(title__icontains=query).values_list("title", flat=True)
+        return list(values.order_by("title").distinct()[:limit])
+
+    raise ValueError(f"Unknown suggestion field: {field}")

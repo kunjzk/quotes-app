@@ -22,6 +22,7 @@ from .services import (
     suggest_today_values,
     update_today_preference,
 )
+from .ocr_service import OCRService
 
 logger = logging.getLogger(__name__)
 
@@ -378,6 +379,26 @@ class BookSuggestView(LoginRequiredMixin, View):
         return JsonResponse({'suggestions': suggestions})
 
 
+class AuthorSuggestView(LoginRequiredMixin, View):
+    """API endpoint: suggest authors as user types."""
+    
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        
+        if not query or len(query) < 2:
+            return JsonResponse({'suggestions': []})
+        
+        # Get unique authors from books that have quotes from this user
+        authors = Book.objects.filter(
+            quote__user=request.user,
+            author__icontains=query
+        ).values_list('author', flat=True).distinct()[:5]
+        
+        suggestions = [{'author': author} for author in authors if author]
+        
+        return JsonResponse({'suggestions': suggestions})
+
+
 class BulkImportView(LoginRequiredMixin, TemplateView):
     """Bulk import quotes from Readwise CSV."""
     template_name = 'quotes/bulk_import.html'
@@ -514,6 +535,54 @@ class RegisterView(CreateView):
         # Log the user in after registration
         login(self.request, self.object)
         return response
+
+
+class ImageUploadView(LoginRequiredMixin, TemplateView):
+    """Upload image and extract text using OCR."""
+    template_name = 'quotes/image_upload.html'
+    
+    def post(self, request):
+        if 'image' not in request.FILES:
+            return JsonResponse({'error': 'No image uploaded'}, status=400)
+        
+        image_file = request.FILES['image']
+        
+        if image_file.size > 10 * 1024 * 1024:
+            return JsonResponse({'error': 'Image too large (max 10MB)'}, status=400)
+        
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
+        if image_file.content_type not in allowed_types:
+            return JsonResponse({
+                'error': f'Invalid file type. Allowed types: JPEG, PNG, WebP'
+            }, status=400)
+        
+        try:
+            extracted_text = OCRService.extract_text_from_image(image_file)
+            
+            if not extracted_text:
+                return JsonResponse({
+                    'error': 'No text could be extracted from the image. Please try a clearer image.'
+                }, status=400)
+            
+            cleaned_text = OCRService.preprocess_extracted_text(extracted_text)
+            
+            logger.info(
+                "Image OCR completed",
+                extra={
+                    "user_id": request.user.id,
+                    "text_length": len(cleaned_text),
+                }
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'text': cleaned_text,
+                'message': 'Text extracted successfully'
+            })
+            
+        except Exception as e:
+            logger.error(f"Image upload error: {e}", exc_info=True)
+            return JsonResponse({'error': f'Failed to process image: {str(e)}'}, status=500)
 
 
 # Leaving here as a reference for the basic form view

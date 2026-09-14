@@ -30,9 +30,23 @@
                 
                 <!-- Quote Input -->
                 <div>
-                    <label class="font-mono text-xs uppercase tracking-wide mb-2 block" style="color: var(--grey);">
-                        NEW PASSAGE
-                    </label>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
+                            NEW PASSAGE
+                        </label>
+                        <button
+                            type="button"
+                            id="voice-button"
+                            class="flex items-center gap-2 px-3 py-1 rounded font-mono text-xs uppercase tracking-wide transition-all"
+                            style="background-color: var(--teal); color: var(--paper);"
+                            title="Click to start voice recording"
+                        >
+                            <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                            <span id="voice-status">Voice</span>
+                        </button>
+                    </div>
                     <textarea
                         id="quote-input"
                         name="content"
@@ -44,6 +58,13 @@
 — walden | Henry David Thoreau | p. 90"
                         autofocus
                     ></textarea>
+                </div>
+                
+                <!-- Voice Recording Status -->
+                <div id="voice-message" class="hidden p-4 rounded" style="background-color: var(--teal); color: var(--paper);">
+                    <p class="font-mono text-sm">
+                        <span id="voice-message-text">🎤 Recording... Click stop when done</span>
+                    </p>
                 </div>
                 
                 <!-- Helper Text -->
@@ -206,6 +227,150 @@
         successMessage.classList.add('hidden');
         errorMessage.classList.add('hidden');
         input.focus();
+    }
+</script>
+
+<!-- Voice Input with browser-whisper -->
+<script type="module">
+    import { BrowserWhisper } from 'https://esm.sh/browser-whisper@1.0.1';
+    
+    const voiceButton = document.getElementById('voice-button');
+    const voiceStatus = document.getElementById('voice-status');
+    const voiceMessage = document.getElementById('voice-message');
+    const voiceMessageText = document.getElementById('voice-message-text');
+    const input = document.getElementById('quote-input');
+    
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let whisper = null;
+    let isRecording = false;
+    
+    // Initialize Whisper (lazy load)
+    async function initWhisper() {
+        if (!whisper) {
+            voiceMessageText.textContent = '⏳ Loading AI model (first time only)...';
+            voiceMessage.classList.remove('hidden');
+            try {
+                whisper = new BrowserWhisper({ model: 'whisper-base' });
+                voiceMessageText.textContent = '✓ Model loaded! Ready to record.';
+                setTimeout(() => {
+                    voiceMessage.classList.add('hidden');
+                }, 2000);
+            } catch (error) {
+                console.error('Failed to load Whisper:', error);
+                voiceMessageText.textContent = '❌ Failed to load AI model';
+                voiceMessage.classList.remove('hidden');
+                setTimeout(() => {
+                    voiceMessage.classList.add('hidden');
+                }, 3000);
+                throw error;
+            }
+        }
+        return whisper;
+    }
+    
+    voiceButton.addEventListener('click', async () => {
+        if (!isRecording) {
+            await startRecording();
+        } else {
+            await stopRecording();
+        }
+    });
+    
+    async function startRecording() {
+        try {
+            // Request microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            // Initialize Whisper model
+            await initWhisper();
+            
+            // Start recording
+            audioChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+            
+            mediaRecorder.onstop = async () => {
+                // Stop all tracks to turn off microphone
+                stream.getTracks().forEach(track => track.stop());
+                
+                // Create audio blob
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                
+                // Transcribe
+                await transcribeAudio(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            isRecording = true;
+            
+            // Update UI
+            voiceStatus.textContent = 'Stop';
+            voiceButton.style.backgroundColor = '#dc2626'; // Red when recording
+            voiceMessageText.textContent = '🎤 Recording... Click stop when done';
+            voiceMessage.classList.remove('hidden');
+            
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            alert('Failed to access microphone. Please check your permissions.');
+        }
+    }
+    
+    async function stopRecording() {
+        if (mediaRecorder && isRecording) {
+            mediaRecorder.stop();
+            isRecording = false;
+            
+            // Update UI
+            voiceStatus.textContent = 'Voice';
+            voiceButton.style.backgroundColor = 'var(--teal)';
+            voiceMessageText.textContent = '⏳ Transcribing...';
+        }
+    }
+    
+    async function transcribeAudio(audioBlob) {
+        try {
+            voiceMessageText.textContent = '⏳ Transcribing...';
+            
+            // Convert blob to file
+            const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+            
+            // Transcribe with Whisper
+            let transcription = '';
+            for await (const { text } of whisper.transcribe(audioFile)) {
+                transcription += text + ' ';
+            }
+            
+            // Insert transcription into textarea
+            const currentValue = input.value.trim();
+            if (currentValue) {
+                input.value = currentValue + '\n\n' + transcription.trim();
+            } else {
+                input.value = transcription.trim();
+            }
+            
+            // Trigger input event to parse attribution
+            input.dispatchEvent(new Event('input'));
+            
+            // Show success
+            voiceMessageText.textContent = '✓ Transcription complete! Edit as needed.';
+            setTimeout(() => {
+                voiceMessage.classList.add('hidden');
+            }, 3000);
+            
+            // Focus textarea for editing
+            input.focus();
+            
+        } catch (error) {
+            console.error('Transcription error:', error);
+            voiceMessageText.textContent = '❌ Transcription failed. Please try again.';
+            setTimeout(() => {
+                voiceMessage.classList.add('hidden');
+            }, 3000);
+        }
     }
 </script>
 {% endblock %}

@@ -9,6 +9,7 @@ urlpatterns = [
     path("today/", views.TodayView.as_view(), name="today"),
     path("shelf/", views.ShelfView.as_view(), name="shelf"),
     path("capture/", views.CaptureView.as_view(), name="capture"),
+    path("photo/", views.ImageUploadView.as_view(), name="image_upload"),
     path("import/", views.BulkImportView.as_view(), name="bulk_import"),
     
     # HTMX endpoints

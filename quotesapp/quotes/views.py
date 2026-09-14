@@ -168,6 +168,7 @@ class TodayView(LoginRequiredMixin, TemplateView):
         context['is_filtered'] = bool(preference.author or preference.book_title)
         context['min_quote_count'] = TodayPreference.MIN_QUOTE_COUNT
         context['max_quote_count'] = TodayPreference.MAX_QUOTE_COUNT
+        context['default_quote_count'] = TodayPreference.DEFAULT_QUOTE_COUNT
         
         return context
 

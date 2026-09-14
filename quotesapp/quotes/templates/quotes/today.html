@@ -100,6 +100,44 @@
         background-color: var(--teal);
         color: var(--paper);
     }
+    .criteria-btn {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        padding: 0.35em 0.9em;
+        border: 1px solid currentColor;
+        cursor: pointer;
+        background: transparent;
+        transition: background 0.15s, color 0.15s;
+    }
+    .criteria-btn:hover {
+        background: var(--ink);
+        color: var(--paper);
+    }
+    .criteria-btn.reset-btn {
+        color: var(--grey);
+        border-color: var(--grey);
+    }
+    .criteria-btn.reset-btn:hover {
+        background: var(--grey);
+        color: var(--paper);
+    }
+    .nav-btn {
+        font-family: var(--font-mono, monospace);
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.15s;
+        padding: 0;
+    }
+    .nav-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
@@ -107,8 +145,13 @@
 <div class="h-full flex items-center justify-center p-8">
     <div class="max-w-3xl w-full">
         {% if total_quotes %}
-            <!-- Search Criteria + Reading Streak -->
-            <div class="flex justify-between items-start mb-8 gap-6">
+            <!-- Welcome message -->
+            <p class="font-mono text-xs uppercase tracking-wide mb-6" style="color: var(--grey);">
+                Welcome back. Here are your passages for today.
+            </p>
+
+            <!-- Search Criteria -->
+            <div class="mb-6">
                 <div id="criteria" class="flex-1 min-w-0">
                     <p class="font-mono text-xs uppercase tracking-wide mb-2 select-none">search criteria</p>
                     <form id="criteria-form"
@@ -160,8 +203,10 @@
                     </form>
                     <p id="criteria-error" class="font-mono text-xs mt-1 text-red-700" hidden></p>
                 </div>
-                <div class="wax-seal flex-shrink-0" title="{{ streak }} day streak">
-                    {{ streak }}
+                <!-- Search and Reset buttons -->
+                <div class="flex items-center gap-3 mt-4">
+                    <button id="search-btn" class="criteria-btn" style="color: var(--ink);">Search</button>
+                    <button id="reset-btn" class="criteria-btn reset-btn">Reset</button>
                 </div>
             </div>
 
@@ -169,25 +214,12 @@
             <!-- Quote Pages -->
             <div id="quote-container" class="relative min-h-[400px]">
                 {% for quote in quotes %}
-                <div class="quote-page {% if forloop.first %}active{% else %}hidden{% endif %}" 
+                <div class="quote-page {% if forloop.first %}active{% else %}hidden{% endif %}"
                      data-page="{{ forloop.counter0 }}"
                      data-total="{{ quotes|length }}">
-                    
-                    <!-- Book Title Header -->
-                    <div class="mb-8 pb-4 border-b" style="border-color: var(--ink); opacity: 0.2;">
-                        <h2 class="text-sm font-mono uppercase tracking-wide" style="color: var(--grey);">
-                            {{ quote.book.title }}
-                        </h2>
-                        {% if quote.book.author %}
-                        <p class="text-xs font-mono italic" style="color: var(--grey);">
-                            {{ quote.book.author }}
-                        </p>
-                        {% endif %}
-                    </div>
-                    
-                    <!-- Quote with Page Number in Margin -->
+
+                    <!-- Quote Text -->
                     <div class="flex items-start space-x-8">
-                        <!-- Page Number (Margin) -->
                         {% if quote.page_number %}
                         <div class="w-12 flex-shrink-0 pt-1">
                             <span class="font-mono text-sm" style="color: var(--grey);">
@@ -195,51 +227,58 @@
                             </span>
                         </div>
                         {% endif %}
-                        
-                    <!-- Quote Text -->
-                    <div class="flex-1">
-                        <blockquote class="text-2xl leading-relaxed">
-                            {{ quote.quote }}
-                        </blockquote>
+                        <div class="flex-1">
+                            <blockquote class="text-2xl leading-relaxed">
+                                {{ quote.quote }}
+                            </blockquote>
+                        </div>
                     </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <!-- Global Navigation (outside quote pages) -->
-        <div class="mt-16 flex justify-between items-center">
-            <button 
-                id="prev-button"
-                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
-                style="opacity: 0.3; cursor: not-allowed;">
-                ← prev
-            </button>
-            
-            <div class="flex space-x-2">
-                {% for quote in quotes %}
-                <div class="page-indicator w-2 h-2 rounded-full transition-all"
-                     data-page="{{ forloop.counter0 }}"
-                     style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
+
+                    <!-- Book attribution below quote -->
+                    <div class="mt-8 pt-4 border-t" style="border-color: var(--ink); border-opacity: 0.4;">
+                        <p class="font-mono text-sm uppercase tracking-wide" style="color: var(--ink);">
+                            {{ quote.book.title }}
+                        </p>
+                        {% if quote.book.author %}
+                        <p class="font-mono text-xs italic mt-1" style="color: var(--ink); opacity: 0.75;">
+                            {{ quote.book.author }}
+                        </p>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
-            
-            <button 
-                id="next-button"
-                class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors">
-                turn →
-            </button>
-        </div>
-            
+
+            <!-- Global Navigation -->
+            <div class="mt-16 flex justify-between items-center">
+                <button
+                    id="prev-button"
+                    class="nav-btn"
+                    {% if quotes|length <= 1 %}disabled{% endif %}>
+                    ← prev
+                </button>
+
+                <div class="flex space-x-2">
+                    {% for quote in quotes %}
+                    <div class="page-indicator w-2 h-2 rounded-full transition-all"
+                         data-page="{{ forloop.counter0 }}"
+                         style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <button
+                    id="next-button"
+                    class="nav-btn"
+                    {% if quotes|length <= 1 %}disabled{% endif %}>
+                    turn →
+                </button>
+            </div>
+
             <!-- Total Count -->
             <div class="mt-12 text-center">
                 <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
-                    {% if is_filtered %}
-                        {{ matching_quotes }} of {{ total_quotes }} passage{{ total_quotes|pluralize }} match
-                    {% else %}
-                        {{ total_quotes }} passage{{ total_quotes|pluralize }}
-                    {% endif %}
+                    showing {{ quotes|length }} of {{ total_quotes }} passage{{ total_quotes|pluralize }}
                 </p>
             </div>
 
@@ -254,14 +293,14 @@
                 </p>
             </div>
             {% endif %}
-            
+
         {% else %}
             <!-- Empty State -->
             <div class="text-center py-16">
                 <p class="text-xl mb-8" style="color: var(--grey);">
                     No quotes yet. Start capturing your passages.
                 </p>
-                <a href="{% url 'quotes:capture' %}" 
+                <a href="{% url 'quotes:capture' %}"
                    class="inline-block px-6 py-3 bg-teal text-white font-mono text-sm uppercase tracking-wide hover:opacity-90 transition-opacity">
                     Capture your first quote
                 </a>
@@ -273,21 +312,25 @@
 <script>
     let currentPage = 0;
     const totalPages = {{ quotes|length }};
-    
+
+    function updateNavButtons() {
+        const prevBtn = document.getElementById('prev-button');
+        const nextBtn = document.getElementById('next-button');
+        if (prevBtn) prevBtn.disabled = (currentPage === 0);
+        if (nextBtn) nextBtn.disabled = (currentPage >= totalPages - 1);
+    }
+
     function showPage(pageIndex) {
-        // Hide all pages
         document.querySelectorAll('.quote-page').forEach(page => {
             page.classList.add('hidden');
             page.classList.remove('active', 'page-fade-enter');
         });
-        
-        // Show target page with animation
+
         const targetPage = document.querySelector(`[data-page="${pageIndex}"]`);
         if (targetPage) {
             targetPage.classList.remove('hidden');
             targetPage.classList.add('active', 'page-fade-enter');
-            
-            // Update indicators
+
             document.querySelectorAll('.page-indicator').forEach((indicator, idx) => {
                 if (idx === pageIndex) {
                     indicator.style.backgroundColor = 'var(--teal)';
@@ -297,85 +340,61 @@
                     indicator.style.opacity = '0.3';
                 }
             });
-            
+
             currentPage = pageIndex;
+            updateNavButtons();
         }
     }
-    
+
     function nextPage() {
         if (currentPage < totalPages - 1) {
             showPage(currentPage + 1);
         }
     }
-    
+
     function previousPage() {
         if (currentPage > 0) {
             showPage(currentPage - 1);
         }
     }
-    
-    // Add event listeners for navigation buttons
-    document.addEventListener('DOMContentLoaded', function() {
-        // Next buttons
-        document.querySelectorAll('.next-button').forEach(btn => {
-            btn.addEventListener('click', nextPage);
-            btn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                nextPage();
-            });
-        });
-        
-        // Previous buttons
-        document.querySelectorAll('.prev-button').forEach(btn => {
-            btn.addEventListener('click', previousPage);
-            btn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                previousPage();
-            });
-        });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        updateNavButtons();
+
+        const nextBtn = document.getElementById('next-button');
+        const prevBtn = document.getElementById('prev-button');
+
+        if (nextBtn) {
+            nextBtn.addEventListener('click', nextPage);
+        }
+        if (prevBtn) {
+            prevBtn.addEventListener('click', previousPage);
+        }
     });
-    
+
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
-        if (e.target.closest && e.target.closest('input, textarea')) {
-            return;
-        }
-        if (e.key === 'ArrowRight') {
-            nextPage();
-        } else if (e.key === 'ArrowLeft') {
-            previousPage();
-        }
+        if (e.target.closest && e.target.closest('input, textarea')) return;
+        if (e.key === 'ArrowRight') nextPage();
+        else if (e.key === 'ArrowLeft') previousPage();
     });
-    
-    // Swipe support for mobile
+
+    // Swipe support
     let touchStartX = 0;
     let touchEndX = 0;
-    
     const container = document.getElementById('quote-container');
     if (container) {
         container.addEventListener('touchstart', (e) => {
             touchStartX = e.changedTouches[0].screenX;
         });
-        
         container.addEventListener('touchend', (e) => {
             touchEndX = e.changedTouches[0].screenX;
-            handleSwipe();
-        });
-    }
-    
-    function handleSwipe() {
-        const swipeThreshold = 50;
-        const diff = touchStartX - touchEndX;
-        
-        if (Math.abs(diff) > swipeThreshold) {
-            if (diff > 0) {
-                // Swiped left - go to next page
-                nextPage();
-            } else {
-                // Swiped right - go to previous page
-                previousPage();
+            const diff = touchStartX - touchEndX;
+            if (Math.abs(diff) > 50) {
+                if (diff > 0) nextPage();
+                else previousPage();
             }
-        }
+        });
     }
 
     // Search criteria: "I want to see __ quotes by ____ author in ____ book."
@@ -389,18 +408,16 @@
         const bookInput = document.getElementById('criteria-book');
         const countLabel = document.getElementById('criteria-count-label');
         const errorEl = document.getElementById('criteria-error');
+        const searchBtn = document.getElementById('search-btn');
+        const resetBtn = document.getElementById('reset-btn');
         const saveUrl = form.dataset.saveUrl;
         const suggestUrl = form.dataset.suggestUrl;
         const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
         const ANY = 'any';
+        const MIN_COUNT = {{ min_quote_count }};
+        const MAX_COUNT = {{ max_quote_count }};
 
-        const saved = {
-            quote_count: countInput.value.trim(),
-            author: authorInput.value.trim(),
-            book: bookInput.value.trim(),
-        };
         let saving = false;
-        let countTimer = null;
 
         // Size each blank to its content so the sentence reads naturally.
         const measure = document.createElement('span');
@@ -420,11 +437,6 @@
             };
         }
 
-        function isDirty() {
-            const now = currentValues();
-            return Object.keys(saved).some(key => saved[key] !== now[key]);
-        }
-
         function showError(message) {
             errorEl.textContent = message;
             errorEl.hidden = !message;
@@ -438,8 +450,22 @@
             root.classList.remove('is-active');
         }
 
+        function validateCount() {
+            const val = parseInt(countInput.value.trim(), 10);
+            if (isNaN(val) || val < MIN_COUNT) {
+                countInput.value = MIN_COUNT;
+                fit(countInput);
+            } else if (val > MAX_COUNT) {
+                countInput.value = MAX_COUNT;
+                fit(countInput);
+            }
+            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
+        }
+
+        // Save criteria to backend silently (no page reload).
         async function commit() {
-            if (saving || !isDirty()) return;
+            if (saving) return;
+            validateCount();
             saving = true;
             root.classList.add('is-saving');
             showError('');
@@ -453,17 +479,38 @@
                 if (!response.ok) {
                     throw new Error(data.error || 'Could not save your criteria');
                 }
-                window.location.reload();
             } catch (err) {
+                showError(err.message);
+            } finally {
                 saving = false;
                 root.classList.remove('is-saving');
-                showError(err.message);
             }
+        }
+
+        // Search: save then reload to show new results.
+        async function search() {
+            await commit();
+            if (!errorEl.hidden) return;
+            window.location.reload();
+        }
+
+        // Reset: clear author/book, restore default count, save, then reload.
+        async function reset() {
+            countInput.value = '{{ default_quote_count }}';
+            authorInput.value = '';
+            bookInput.value = '';
+            [countInput, authorInput, bookInput].forEach(fit);
+            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
+            await commit();
+            window.location.reload();
         }
 
         form.addEventListener('submit', (e) => e.preventDefault());
 
-        // Clicking anywhere on the sentence wakes it up and drops the cursor in a blank.
+        if (searchBtn) searchBtn.addEventListener('click', search);
+        if (resetBtn) resetBtn.addEventListener('click', reset);
+
+        // Clicking anywhere on the sentence wakes it up.
         root.addEventListener('mousedown', (e) => {
             activate();
             if (e.target.tagName !== 'INPUT' && !e.target.closest('.suggestions')) {
@@ -473,32 +520,24 @@
             }
         });
 
-        // Grey out again (and save) when focus leaves the whole sentence.
         root.addEventListener('focusout', (e) => {
             if (!root.contains(e.relatedTarget)) {
                 deactivate();
-                commit();
             }
         });
 
-        // Number of quotes
         countInput.addEventListener('focus', activate);
         countInput.addEventListener('input', () => {
             fit(countInput);
             countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
-            clearTimeout(countTimer);
-            countTimer = setTimeout(commit, 900);
         });
         countInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                clearTimeout(countTimer);
                 countInput.blur();
+                search();
             } else if (e.key === 'Escape') {
                 e.preventDefault();
-                clearTimeout(countTimer);
-                countInput.value = saved.quote_count;
-                fit(countInput);
                 countInput.blur();
             }
         });
@@ -531,6 +570,7 @@
                 input.value = value === ANY ? '' : value;
                 fit(input);
                 close();
+                // Save silently; user must click Search to reload.
                 commit();
             }
 
@@ -542,16 +582,12 @@
 
                 list.innerHTML = '';
                 highlighted = -1;
-                if (!items.length) {
-                    list.hidden = true;
-                    return;
-                }
+                if (!items.length) { list.hidden = true; return; }
                 items.forEach((value) => {
                     const li = document.createElement('li');
                     li.textContent = value;
                     li.setAttribute('role', 'option');
                     if (value === ANY) li.classList.add('is-any');
-                    // mousedown (not click) so the input doesn't blur first
                     li.addEventListener('mousedown', (e) => {
                         e.preventDefault();
                         choose(value);
@@ -573,15 +609,10 @@
                     const data = await response.json();
                     if (id !== requestId || document.activeElement !== input) return;
                     render(data.suggestions || []);
-                } catch (err) {
-                    // Suggestions are a convenience; typing still works without them.
-                }
+                } catch (err) { /* suggestions are a convenience */ }
             }
 
-            input.addEventListener('focus', () => {
-                activate();
-                load();
-            });
+            input.addEventListener('focus', () => { activate(); load(); });
             input.addEventListener('input', () => {
                 fit(input);
                 clearTimeout(debounce);
@@ -601,11 +632,10 @@
                         choose(items[highlighted]);
                     } else {
                         input.blur();
+                        search();
                     }
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
-                    input.value = saved[field];
-                    fit(input);
                     close();
                     input.blur();
                 }
@@ -616,7 +646,6 @@
         setupAutocomplete(bookInput, 'book', authorInput, 'author');
 
         [countInput, authorInput, bookInput].forEach(fit);
-        // Re-measure once web fonts have loaded, since widths depend on them.
         if (document.fonts && document.fonts.ready) {
             document.fonts.ready.then(() => [countInput, authorInput, bookInput].forEach(fit));
         }

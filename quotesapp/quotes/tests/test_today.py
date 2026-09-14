@@ -271,7 +271,7 @@ class TodayViewTest(TodayTestMixin, TestCase):
         self.assertEqual(len(resp.context["quotes"]), 3)
         self.assertEqual(resp.context["matching_quotes"], 3)
         self.assertTrue(resp.context["is_filtered"])
-        self.assertContains(resp, "3 of 9 passages match")
+        self.assertContains(resp, "showing 3 of 9 passages")
 
     def test_no_match_state_keeps_criteria_editable(self):
         update_today_preference(self.user, 3, "Nobody Known", "")

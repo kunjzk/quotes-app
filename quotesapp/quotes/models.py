@@ -72,7 +72,7 @@ class TodayPreference(models.Model):
     """
     DEFAULT_QUOTE_COUNT = 3
     MIN_QUOTE_COUNT = 1
-    MAX_QUOTE_COUNT = 20
+    MAX_QUOTE_COUNT = 50
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="today_preference"

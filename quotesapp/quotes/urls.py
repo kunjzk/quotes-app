@@ -7,6 +7,7 @@ urlpatterns = [
     # Marginalia main views
     path("", views.TodayView.as_view(), name="today"),
     path("today/", views.TodayView.as_view(), name="today"),
+    path("today/preferences/", views.TodayPreferenceView.as_view(), name="today_preferences"),
     path("shelf/", views.ShelfView.as_view(), name="shelf"),
     path("capture/", views.CaptureView.as_view(), name="capture"),
     path("import/", views.BulkImportView.as_view(), name="bulk_import"),
@@ -14,6 +15,7 @@ urlpatterns = [
     # HTMX endpoints
     path("api/book/<int:pk>/quotes/", views.BookQuotesView.as_view(), name="book_quotes"),
     path("api/book/suggest/", views.BookSuggestView.as_view(), name="book_suggest"),
+    path("api/today/suggest/", views.TodaySuggestView.as_view(), name="today_suggest"),
     
     # Legacy views (keep for admin/compatibility)
     path("list/", views.QuotesListView.as_view(), name="quotes_list"),

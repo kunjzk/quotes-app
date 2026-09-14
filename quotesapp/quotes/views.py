@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, TemplateView
-from .models import Quote, Book, User
+from .models import Quote, Book, User, TodayPreference
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm, UserRegistrationForm
@@ -11,11 +11,17 @@ from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.db.models import Count, Q
 import logging
-import random
 import re
 import csv
 import io
-from .services import create_quote
+from .services import (
+    create_quote,
+    filter_quotes_for_today,
+    get_today_preference,
+    get_todays_quotes,
+    suggest_today_values,
+    update_today_preference,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,34 +139,83 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
 # Marginalia Views
 
 class TodayView(LoginRequiredMixin, TemplateView):
-    """Show today's 3 quotes - the same quotes throughout the day."""
+    """
+    Show today's quotes - the same quotes throughout the day. How many, and
+    from which author/book, is driven by the user's TodayPreference.
+    """
     template_name = 'quotes/today.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Get user's quotes
-        user_quotes = Quote.objects.filter(user=self.request.user)
-        
-        # Select 3 random quotes (same seed per day for consistency)
-        today_seed = timezone.now().date().toordinal()
-        random.seed(today_seed + self.request.user.id)
-        
-        all_quotes = list(user_quotes)
-        if len(all_quotes) >= 3:
-            todays_quotes = random.sample(all_quotes, 3)
-        else:
-            todays_quotes = all_quotes
+        user = self.request.user
+
+        preference = get_today_preference(user)
+        todays_quotes = get_todays_quotes(user, preference)
+
+        total_quotes = Quote.objects.filter(user=user).count()
+        matching_quotes = filter_quotes_for_today(user, preference.author, preference.book_title).count()
         
         # Calculate reading streak (days with quotes)
         # Simple version: count total quotes / 3 (assuming 3 quotes per day)
-        streak = max(1, len(all_quotes) // 3)
+        streak = max(1, total_quotes // 3)
         
         context['quotes'] = todays_quotes
         context['streak'] = streak
-        context['total_quotes'] = len(all_quotes)
+        context['total_quotes'] = total_quotes
+        context['matching_quotes'] = matching_quotes
+        context['preference'] = preference
+        context['is_filtered'] = bool(preference.author or preference.book_title)
+        context['min_quote_count'] = TodayPreference.MIN_QUOTE_COUNT
+        context['max_quote_count'] = TodayPreference.MAX_QUOTE_COUNT
         
         return context
+
+
+class TodayPreferenceView(LoginRequiredMixin, View):
+    """Save the fill-in-the-blank criteria from the Today screen."""
+
+    def post(self, request):
+        raw_count = request.POST.get('quote_count', '').strip()
+        try:
+            quote_count = int(raw_count)
+        except ValueError:
+            return JsonResponse({'error': 'Number of quotes must be a whole number'}, status=400)
+
+        try:
+            preference = update_today_preference(
+                request.user,
+                quote_count=quote_count,
+                author=request.POST.get('author', ''),
+                book_title=request.POST.get('book', ''),
+            )
+        except ValidationError as e:
+            messages = [msg for msgs in e.message_dict.values() for msg in msgs]
+            return JsonResponse({'error': ' '.join(messages)}, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'quote_count': preference.quote_count,
+            'author': preference.author,
+            'book': preference.book_title,
+        })
+
+
+class TodaySuggestView(LoginRequiredMixin, View):
+    """Autocomplete for the author / book blanks on the Today screen."""
+
+    def get(self, request):
+        field = request.GET.get('field', '')
+        if field not in ('author', 'book'):
+            return JsonResponse({'error': 'field must be "author" or "book"'}, status=400)
+
+        suggestions = suggest_today_values(
+            request.user,
+            field=field,
+            query=request.GET.get('q', ''),
+            author=request.GET.get('author', ''),
+            book_title=request.GET.get('book', ''),
+        )
+        return JsonResponse({'suggestions': suggestions})
 
 
 class CaptureView(LoginRequiredMixin, TemplateView):

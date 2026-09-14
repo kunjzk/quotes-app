@@ -2,17 +2,170 @@
 
 {% block title %}Today · ReadReadRead{% endblock %}
 
+{% block extra_head %}
+<style>
+    /* Fill-in-the-blank search criteria */
+    #criteria {
+        color: var(--grey);
+        cursor: text;
+        transition: color 0.2s ease;
+    }
+    #criteria.is-active {
+        color: var(--ink);
+    }
+    #criteria.is-saving {
+        opacity: 0.5;
+        pointer-events: none;
+    }
+    #criteria .blank {
+        position: relative;
+        display: inline-block;
+        vertical-align: baseline;
+    }
+    #criteria .blank input {
+        background: transparent;
+        border: 0;
+        border-bottom: 1px dashed currentColor;
+        border-radius: 0;
+        color: inherit;
+        font: inherit;
+        line-height: inherit;
+        padding: 0 0.2em;
+        margin: 0;
+        outline: none;
+        text-align: center;
+        min-width: 2.5ch;
+        -moz-appearance: textfield;
+        appearance: textfield;
+    }
+    #criteria .blank input::-webkit-outer-spin-button,
+    #criteria .blank input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+    #criteria .blank input::placeholder {
+        color: inherit;
+        opacity: 1;
+        font-style: italic;
+    }
+    #criteria.is-active .blank input {
+        border-bottom-style: solid;
+        border-bottom-color: var(--teal);
+    }
+    #criteria .blank input:focus {
+        color: var(--teal);
+    }
+    #criteria .measure {
+        position: absolute;
+        visibility: hidden;
+        white-space: pre;
+        pointer-events: none;
+        top: 0;
+        left: 0;
+    }
+    #criteria .suggestions {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        z-index: 30;
+        min-width: 100%;
+        max-width: min(75vw, 28rem);
+        margin: 0.25rem 0 0;
+        padding: 0.25rem 0;
+        list-style: none;
+        background-color: var(--paper);
+        border: 1px solid var(--ink);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        text-align: left;
+        font-size: 0.875rem;
+        font-style: normal;
+        color: var(--ink);
+    }
+    #criteria .suggestions[hidden] {
+        display: none;
+    }
+    #criteria .suggestions li {
+        padding: 0.3rem 0.75rem;
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #criteria .suggestions li.is-any {
+        font-style: italic;
+        color: var(--grey);
+    }
+    #criteria .suggestions li:hover,
+    #criteria .suggestions li.is-highlighted {
+        background-color: var(--teal);
+        color: var(--paper);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="h-full flex items-center justify-center p-8">
     <div class="max-w-3xl w-full">
-        {% if quotes %}
-            <!-- Reading Streak -->
-            <div class="flex justify-end mb-8">
-                <div class="wax-seal" title="{{ streak }} day streak">
+        {% if total_quotes %}
+            <!-- Search Criteria + Reading Streak -->
+            <div class="flex justify-between items-start mb-8 gap-6">
+                <div id="criteria" class="flex-1 min-w-0">
+                    <p class="font-mono text-xs uppercase tracking-wide mb-2 select-none">search criteria</p>
+                    <form id="criteria-form"
+                          class="text-lg leading-loose"
+                          autocomplete="off"
+                          data-save-url="{% url 'quotes:today_preferences' %}"
+                          data-suggest-url="{% url 'quotes:today_suggest' %}">
+                        {% csrf_token %}
+                        I want to see
+                        <span class="blank">
+                            <input id="criteria-count"
+                                   name="quote_count"
+                                   type="number"
+                                   inputmode="numeric"
+                                   min="{{ min_quote_count }}"
+                                   max="{{ max_quote_count }}"
+                                   value="{{ preference.quote_count }}"
+                                   aria-label="Number of quotes">
+                        </span>
+                        <span id="criteria-count-label">quote{{ preference.quote_count|pluralize }}</span> by
+                        <span class="blank">
+                            <input id="criteria-author"
+                                   name="author"
+                                   type="text"
+                                   placeholder="any"
+                                   value="{{ preference.author }}"
+                                   maxlength="255"
+                                   autocomplete="off"
+                                   spellcheck="false"
+                                   aria-label="Author"
+                                   aria-autocomplete="list">
+                            <ul class="suggestions" role="listbox" hidden></ul>
+                        </span>
+                        author in
+                        <span class="blank">
+                            <input id="criteria-book"
+                                   name="book"
+                                   type="text"
+                                   placeholder="any"
+                                   value="{{ preference.book_title }}"
+                                   maxlength="255"
+                                   autocomplete="off"
+                                   spellcheck="false"
+                                   aria-label="Book"
+                                   aria-autocomplete="list">
+                            <ul class="suggestions" role="listbox" hidden></ul>
+                        </span>
+                        book.
+                    </form>
+                    <p id="criteria-error" class="font-mono text-xs mt-1 text-red-700" hidden></p>
+                </div>
+                <div class="wax-seal flex-shrink-0" title="{{ streak }} day streak">
                     {{ streak }}
                 </div>
             </div>
-            
+
+            {% if quotes %}
             <!-- Quote Pages -->
             <div id="quote-container" class="relative min-h-[400px]">
                 {% for quote in quotes %}
@@ -82,9 +235,25 @@
             <!-- Total Count -->
             <div class="mt-12 text-center">
                 <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
-                    {{ total_quotes }} passage{{ total_quotes|pluralize }}
+                    {% if is_filtered %}
+                        {{ matching_quotes }} of {{ total_quotes }} passage{{ total_quotes|pluralize }} match
+                    {% else %}
+                        {{ total_quotes }} passage{{ total_quotes|pluralize }}
+                    {% endif %}
                 </p>
             </div>
+
+            {% else %}
+            <!-- No quotes match the criteria -->
+            <div id="no-match" class="text-center py-16">
+                <p class="text-xl mb-4" style="color: var(--grey);">
+                    No passages match these criteria.
+                </p>
+                <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
+                    Adjust the author or book above, or set them back to any.
+                </p>
+            </div>
+            {% endif %}
             
         {% else %}
             <!-- Empty State -->
@@ -168,6 +337,9 @@
     
     // Keyboard navigation
     document.addEventListener('keydown', (e) => {
+        if (e.target.closest && e.target.closest('input, textarea')) {
+            return;
+        }
         if (e.key === 'ArrowRight') {
             nextPage();
         } else if (e.key === 'ArrowLeft') {
@@ -205,5 +377,249 @@
             }
         }
     }
+
+    // Search criteria: "I want to see __ quotes by ____ author in ____ book."
+    (function () {
+        const root = document.getElementById('criteria');
+        if (!root) return;
+
+        const form = document.getElementById('criteria-form');
+        const countInput = document.getElementById('criteria-count');
+        const authorInput = document.getElementById('criteria-author');
+        const bookInput = document.getElementById('criteria-book');
+        const countLabel = document.getElementById('criteria-count-label');
+        const errorEl = document.getElementById('criteria-error');
+        const saveUrl = form.dataset.saveUrl;
+        const suggestUrl = form.dataset.suggestUrl;
+        const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+        const ANY = 'any';
+
+        const saved = {
+            quote_count: countInput.value.trim(),
+            author: authorInput.value.trim(),
+            book: bookInput.value.trim(),
+        };
+        let saving = false;
+        let countTimer = null;
+
+        // Size each blank to its content so the sentence reads naturally.
+        const measure = document.createElement('span');
+        measure.className = 'measure';
+        form.appendChild(measure);
+        function fit(input) {
+            measure.style.font = getComputedStyle(input).font;
+            measure.textContent = input.value || input.placeholder || '0';
+            input.style.width = (measure.offsetWidth + 12) + 'px';
+        }
+
+        function currentValues() {
+            return {
+                quote_count: countInput.value.trim(),
+                author: authorInput.value.trim(),
+                book: bookInput.value.trim(),
+            };
+        }
+
+        function isDirty() {
+            const now = currentValues();
+            return Object.keys(saved).some(key => saved[key] !== now[key]);
+        }
+
+        function showError(message) {
+            errorEl.textContent = message;
+            errorEl.hidden = !message;
+        }
+
+        function activate() {
+            root.classList.add('is-active');
+        }
+
+        function deactivate() {
+            root.classList.remove('is-active');
+        }
+
+        async function commit() {
+            if (saving || !isDirty()) return;
+            saving = true;
+            root.classList.add('is-saving');
+            showError('');
+            try {
+                const response = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken },
+                    body: new URLSearchParams(currentValues()),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Could not save your criteria');
+                }
+                window.location.reload();
+            } catch (err) {
+                saving = false;
+                root.classList.remove('is-saving');
+                showError(err.message);
+            }
+        }
+
+        form.addEventListener('submit', (e) => e.preventDefault());
+
+        // Clicking anywhere on the sentence wakes it up and drops the cursor in a blank.
+        root.addEventListener('mousedown', (e) => {
+            activate();
+            if (e.target.tagName !== 'INPUT' && !e.target.closest('.suggestions')) {
+                e.preventDefault();
+                countInput.focus();
+                countInput.select();
+            }
+        });
+
+        // Grey out again (and save) when focus leaves the whole sentence.
+        root.addEventListener('focusout', (e) => {
+            if (!root.contains(e.relatedTarget)) {
+                deactivate();
+                commit();
+            }
+        });
+
+        // Number of quotes
+        countInput.addEventListener('focus', activate);
+        countInput.addEventListener('input', () => {
+            fit(countInput);
+            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
+            clearTimeout(countTimer);
+            countTimer = setTimeout(commit, 900);
+        });
+        countInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                clearTimeout(countTimer);
+                countInput.blur();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                clearTimeout(countTimer);
+                countInput.value = saved.quote_count;
+                fit(countInput);
+                countInput.blur();
+            }
+        });
+
+        // Author / book blanks with autocomplete
+        function setupAutocomplete(input, field, otherInput, otherParam) {
+            const list = input.parentElement.querySelector('.suggestions');
+            let items = [];
+            let highlighted = -1;
+            let debounce = null;
+            let requestId = 0;
+
+            function close() {
+                list.hidden = true;
+                list.innerHTML = '';
+                items = [];
+                highlighted = -1;
+            }
+
+            function highlight(index) {
+                if (!items.length) return;
+                highlighted = (index + items.length) % items.length;
+                Array.from(list.children).forEach((li, i) => {
+                    li.classList.toggle('is-highlighted', i === highlighted);
+                });
+                list.children[highlighted].scrollIntoView({ block: 'nearest' });
+            }
+
+            function choose(value) {
+                input.value = value === ANY ? '' : value;
+                fit(input);
+                close();
+                commit();
+            }
+
+            function render(values) {
+                const query = input.value.trim().toLowerCase();
+                items = [];
+                if (!query || ANY.startsWith(query)) items.push(ANY);
+                values.forEach(v => { if (!items.includes(v)) items.push(v); });
+
+                list.innerHTML = '';
+                highlighted = -1;
+                if (!items.length) {
+                    list.hidden = true;
+                    return;
+                }
+                items.forEach((value) => {
+                    const li = document.createElement('li');
+                    li.textContent = value;
+                    li.setAttribute('role', 'option');
+                    if (value === ANY) li.classList.add('is-any');
+                    // mousedown (not click) so the input doesn't blur first
+                    li.addEventListener('mousedown', (e) => {
+                        e.preventDefault();
+                        choose(value);
+                    });
+                    list.appendChild(li);
+                });
+                list.hidden = false;
+            }
+
+            async function load() {
+                const id = ++requestId;
+                const params = new URLSearchParams({ field: field, q: input.value.trim() });
+                params.set(otherParam, otherInput.value.trim());
+                try {
+                    const response = await fetch(suggestUrl + '?' + params.toString(), {
+                        headers: { 'Accept': 'application/json' },
+                    });
+                    if (!response.ok) return;
+                    const data = await response.json();
+                    if (id !== requestId || document.activeElement !== input) return;
+                    render(data.suggestions || []);
+                } catch (err) {
+                    // Suggestions are a convenience; typing still works without them.
+                }
+            }
+
+            input.addEventListener('focus', () => {
+                activate();
+                load();
+            });
+            input.addEventListener('input', () => {
+                fit(input);
+                clearTimeout(debounce);
+                debounce = setTimeout(load, 150);
+            });
+            input.addEventListener('blur', close);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (list.hidden) load(); else highlight(highlighted + 1);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    highlight(highlighted - 1);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (highlighted >= 0) {
+                        choose(items[highlighted]);
+                    } else {
+                        input.blur();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    input.value = saved[field];
+                    fit(input);
+                    close();
+                    input.blur();
+                }
+            });
+        }
+
+        setupAutocomplete(authorInput, 'author', bookInput, 'book');
+        setupAutocomplete(bookInput, 'book', authorInput, 'author');
+
+        [countInput, authorInput, bookInput].forEach(fit);
+        // Re-measure once web fonts have loaded, since widths depend on them.
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => [countInput, authorInput, bookInput].forEach(fit));
+        }
+    })();
 </script>
 {% endblock %}

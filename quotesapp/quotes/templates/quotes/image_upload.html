@@ -64,6 +64,10 @@
     <div id="extracted-content" class="hidden">
         <div class="mb-8">
             <h3 class="text-xl font-semibold mb-3">Extracted Text</h3>
+            <div id="confidence-warning" class="hidden mb-3 p-4 rounded-md" style="background-color: #fff7e6; border: 1px solid #c77d00; color: #7a4a00;">
+                <p class="font-semibold mb-1">This text looks unreliable (<span id="confidence-value"></span>% confidence)</p>
+                <p class="text-sm">Try retaking the photo with the page flat, the camera level, even lighting, and the text filling the frame. You can still select and edit what was found below.</p>
+            </div>
             <div id="extracted-text" class="p-4 rounded-lg font-serif text-lg leading-relaxed whitespace-pre-wrap border" style="border-color: var(--teal); background-color: rgba(45, 106, 106, 0.05);">
             </div>
         </div>
@@ -178,6 +182,13 @@ function handleFileSelect(event) {
         
         if (data.success) {
             document.getElementById('extracted-text').textContent = data.text;
+            const warning = document.getElementById('confidence-warning');
+            if (data.low_confidence) {
+                document.getElementById('confidence-value').textContent = Math.round(data.confidence);
+                warning.classList.remove('hidden');
+            } else {
+                warning.classList.add('hidden');
+            }
             document.getElementById('extracted-content').classList.remove('hidden');
             selectedQuotes = [];
             updateQuotesList();

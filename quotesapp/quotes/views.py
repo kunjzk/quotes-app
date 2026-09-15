@@ -558,26 +558,31 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
             }, status=400)
         
         try:
-            extracted_text = OCRService.extract_text_from_image(image_file)
+            result = OCRService.extract_text_from_image(image_file)
             
-            if not extracted_text:
+            if not result:
                 return JsonResponse({
                     'error': 'No text could be extracted from the image. Please try a clearer image.'
                 }, status=400)
             
-            cleaned_text = OCRService.preprocess_extracted_text(extracted_text)
+            cleaned_text = OCRService.preprocess_extracted_text(result.text)
+            low_confidence = result.confidence < OCRService.LOW_CONFIDENCE_THRESHOLD
             
             logger.info(
                 "Image OCR completed",
                 extra={
                     "user_id": request.user.id,
                     "text_length": len(cleaned_text),
+                    "confidence": round(result.confidence, 1),
+                    "rotation": result.rotation,
                 }
             )
             
             return JsonResponse({
                 'success': True,
                 'text': cleaned_text,
+                'confidence': round(result.confidence, 1),
+                'low_confidence': low_confidence,
                 'message': 'Text extracted successfully'
             })
             

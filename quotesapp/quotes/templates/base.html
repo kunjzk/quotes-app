@@ -1,167 +1,206 @@
-<!DOCTYPE html>
-<html lang="en" class="h-full">
+{% load static %}<!DOCTYPE html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}ReadReadRead{% endblock %}</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    
-    <!-- Fonts -->
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
-    <style>
-        /* Marginalia Color Palette */
-        :root {
-            --paper: #e8ebe8;
-            --paper-dark: #2a2e2a;
-            --ink: #1a2332;
-            --ink-dark: #e8ebe8;
-            --teal: #2d6a6a;
-            --teal-dark: #3d8a8a;
-            --grey: #6b7280;
-        }
-        
-        .dark {
-            --paper: var(--paper-dark);
-            --ink: var(--ink-dark);
-            --teal: var(--teal-dark);
-        }
-        
-        body {
-            font-family: 'Newsreader', serif;
-            background-color: var(--paper);
-            color: var(--ink);
-        }
-        
-        .font-mono {
-            font-family: 'IBM Plex Mono', monospace;
-        }
-        
-        .text-teal {
-            color: var(--teal);
-        }
-        
-        .bg-teal {
-            background-color: var(--teal);
-        }
-        
-        .border-teal {
-            border-color: var(--teal);
-        }
-        
-        /* Page turn animation */
-        .page-fade-enter {
-            animation: fadeIn 0.6s ease-in;
-        }
-        
-        .page-fade-exit {
-            animation: fadeOut 0.6s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateX(20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        
-        @keyframes fadeOut {
-            from { opacity: 1; transform: translateX(0); }
-            to { opacity: 0; transform: translateX(-20px); }
-        }
-        
-        /* Ink underline animation */
-        .ink-underline {
-            position: relative;
-        }
-        
-        .ink-underline::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background-color: var(--teal);
-            animation: drawUnderline 0.8s ease-out forwards;
-        }
-        
-        @keyframes drawUnderline {
-            to { width: 100%; }
-        }
-        
-        /* Book spine colors */
-        .spine-color-1 { background-color: #7c4e3d; }
-        .spine-color-2 { background-color: #5a6b4a; }
-        .spine-color-3 { background-color: #b8985f; }
-        .spine-color-4 { background-color: #3d4e6b; }
-        .spine-color-5 { background-color: #4a6b6b; }
-        .spine-color-6 { background-color: #7c5a4e; }
-        
-        /* Hide scrollbar for mobile nav */
-        .scrollbar-hide {
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
-        }
-        .scrollbar-hide::-webkit-scrollbar {
-            display: none;  /* Chrome, Safari, Opera */
-        }
-        
-        /* Wax seal */
-        .wax-seal {
-            width: 32px;
-            height: 32px;
-            background: var(--teal);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--paper);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-    </style>
-    
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300..600;1,6..72,300..500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="{% static 'quotes/app.css' %}">
+
     {% block extra_head %}{% endblock %}
 </head>
-<body class="h-full">
-    <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 border-b" style="background-color: var(--paper); border-color: var(--ink); opacity: 0.95;">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center space-x-4 sm:space-x-8 min-w-0 flex-1">
-                    <h1 class="text-xl font-semibold italic flex-shrink-0">ReadReadRead</h1>
-                    <div class="flex space-x-4 sm:space-x-6 font-mono text-sm uppercase tracking-wide overflow-x-auto scrollbar-hide flex-nowrap">
-                        <a href="{% url 'quotes:today' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'today' %}text-teal{% endif %}">today</a>
-                        <a href="{% url 'quotes:shelf' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'shelf' %}text-teal{% endif %}">shelf</a>
-                        <a href="{% url 'quotes:capture' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'capture' %}text-teal{% endif %}">capture</a>
-                        <a href="{% url 'quotes:image_upload' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'image_upload' %}text-teal{% endif %}">photo</a>
-                        <a href="{% url 'quotes:bulk_import' %}" class="hover:text-teal transition-colors whitespace-nowrap {% if request.resolver_match.url_name == 'bulk_import' %}text-teal{% endif %}">import</a>
-                    </div>
-                </div>
-                <div class="hidden sm:flex items-center space-x-4 flex-shrink-0">
-                    <span class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">{{ request.user.first_name|default:request.user.username }}</span>
-                    <a href="{% url 'admin:index' %}" class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors">admin</a>
-                    <form method="post" action="{% url 'logout' %}" class="inline">
+<body>
+    <header class="bar" id="bar">
+        <a href="{% if user.is_authenticated %}{% url 'quotes:today' %}{% else %}{% url 'login' %}{% endif %}" class="mark">ReadReadRead</a>
+        {% if user.is_authenticated %}
+        {% with n=request.resolver_match.url_name %}
+        <nav class="nav" aria-label="Primary">
+            <a href="{% url 'quotes:today' %}" {% if n == 'today' %}aria-current="page"{% endif %}>Today</a>
+            <a href="{% url 'quotes:shelf' %}" {% if n == 'shelf' %}aria-current="page"{% endif %}>Shelf</a>
+            <a href="{% url 'quotes:capture' %}" {% if n == 'capture' or n == 'image_upload' or n == 'bulk_import' %}aria-current="page"{% endif %}>Capture</a>
+        </nav>
+        {% endwith %}
+        <div class="bar-right">
+            <button class="search-trigger" id="open-search" type="button" aria-label="Search passages">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+                <span class="lbl">Search passages</span><kbd>/</kbd>
+            </button>
+            <details class="account">
+                <summary aria-label="Account menu">{{ user.first_name|default:user.username|slice:":1"|upper }}</summary>
+                <div class="menu">
+                    <span class="who">Signed in as {{ user.first_name|default:user.username }}</span>
+                    {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
+                    <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}
-                        <button type="submit" class="font-mono text-xs uppercase tracking-wide hover:text-teal transition-colors">logout</button>
+                        <button type="submit">Log out</button>
                     </form>
                 </div>
-            </div>
+            </details>
         </div>
-    </nav>
-    
-    <!-- Main Content -->
-    <main class="pt-16 h-full">
+        {% endif %}
+    </header>
+
+    <main>
         {% block content %}{% endblock %}
     </main>
-    
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    {% if user.is_authenticated %}
+    <dialog id="palette" class="palette" aria-label="Search passages">
+        <div class="pinput">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input id="palette-input" type="search" placeholder="Search passages, books, authors" autocomplete="off" spellcheck="false">
+            <kbd>esc</kbd>
+        </div>
+        <div id="palette-results" class="presults"></div>
+        <div class="pfoot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span></div>
+    </dialog>
+    {% endif %}
+
+    <script>
+        // Shared helpers for page scripts.
+        window.escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => (
+            { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+        ));
+
+        let toastTimer;
+        window.toast = (message, { error = false } = {}) => {
+            const el = document.getElementById('toast');
+            el.textContent = message;
+            el.classList.toggle('error', error);
+            el.classList.add('show');
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => el.classList.remove('show'), error ? 4000 : 2200);
+        };
+
+        window.isTyping = (target) => !!(target.closest && target.closest('input, textarea, select, [contenteditable]'));
+
+        addEventListener('scroll', () => {
+            document.getElementById('bar').classList.toggle('scrolled', scrollY > 4);
+        }, { passive: true });
+
+        // Close the account menu when clicking elsewhere.
+        document.addEventListener('click', (e) => {
+            document.querySelectorAll('details.account[open]').forEach((d) => {
+                if (!d.contains(e.target)) d.removeAttribute('open');
+            });
+        });
+    </script>
+
+    {% if user.is_authenticated %}
+    <script>
+        // Focus mode: fade the chrome so only the passage remains.
+        document.addEventListener('keydown', (e) => {
+            if (e.metaKey || e.ctrlKey || e.altKey || isTyping(e.target)) return;
+            if (e.key === 'f') {
+                const on = document.body.classList.toggle('focus');
+                toast(on ? 'Focus mode on. Press f to leave.' : 'Focus mode off');
+            }
+        });
+
+        // Search palette: "/" or Cmd/Ctrl+K from any page.
+        (() => {
+            const dialog = document.getElementById('palette');
+            const input = document.getElementById('palette-input');
+            const results = document.getElementById('palette-results');
+            const searchUrl = "{% url 'quotes:search' %}";
+            const shelfUrl = "{% url 'quotes:shelf' %}";
+            let timer;
+            let selected = 0;
+            let requestId = 0;
+
+            const items = () => results.querySelectorAll('.pitem');
+            function mark() {
+                items().forEach((el, i) => el.classList.toggle('sel', i === selected));
+                items()[selected]?.scrollIntoView({ block: 'nearest' });
+            }
+
+            function open() {
+                if (dialog.open) return;
+                input.value = '';
+                results.innerHTML = '';
+                dialog.showModal();
+                input.focus();
+            }
+
+            function highlight(text, query) {
+                const safe = escapeHtml(text);
+                if (!query) return safe;
+                const pattern = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                return safe.replace(new RegExp(`(${pattern})`, 'ig'), '<mark>$1</mark>');
+            }
+
+            async function run() {
+                const query = input.value.trim();
+                const id = ++requestId;
+                if (query.length < 2) {
+                    results.innerHTML = '';
+                    return;
+                }
+                let data;
+                try {
+                    const response = await fetch(`${searchUrl}?q=${encodeURIComponent(query)}`, { headers: { Accept: 'application/json' } });
+                    if (!response.ok) throw new Error();
+                    data = await response.json();
+                } catch {
+                    if (id === requestId) results.innerHTML = '<p class="pnone">Search is unavailable right now. Try again in a moment.</p>';
+                    return;
+                }
+                if (id !== requestId) return;
+
+                const passages = data.passages.map((p) => `
+                    <a class="pitem" href="${shelfUrl}?book=${p.book_id}#q${p.id}">
+                        <span class="main">${highlight(p.text, query)}</span>
+                        <span class="sub">${escapeHtml(p.book)}${p.page ? ` · p. ${p.page}` : ''}</span>
+                    </a>`).join('');
+                const books = data.books.map((b) => `
+                    <a class="pitem" href="${shelfUrl}?book=${b.id}">
+                        <span class="main">${highlight(b.title, query)}</span>
+                        <span class="sub">${highlight(b.author, query)} · ${b.count} passage${b.count === 1 ? '' : 's'}</span>
+                    </a>`).join('');
+
+                results.innerHTML =
+                    ((passages ? `<div class="pgroup">Passages</div>${passages}` : '') +
+                     (books ? `<div class="pgroup">Books</div>${books}` : '')) ||
+                    `<p class="pnone">Nothing in your passages matches “${escapeHtml(query)}”.</p>`;
+                selected = 0;
+                mark();
+            }
+
+            input.addEventListener('input', () => {
+                clearTimeout(timer);
+                timer = setTimeout(run, 150);
+            });
+            input.addEventListener('keydown', (e) => {
+                const list = items();
+                if (e.key === 'ArrowDown') { e.preventDefault(); selected = Math.min(selected + 1, list.length - 1); mark(); }
+                if (e.key === 'ArrowUp') { e.preventDefault(); selected = Math.max(selected - 1, 0); mark(); }
+                if (e.key === 'Enter' && list[selected]) { e.preventDefault(); list[selected].click(); }
+            });
+            results.addEventListener('mousemove', (e) => {
+                const item = e.target.closest('.pitem');
+                if (!item) return;
+                selected = [...items()].indexOf(item);
+                mark();
+            });
+            // Clicking the backdrop closes the dialog.
+            dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+            // Following a link to the page we're already on only changes the hash, so close explicitly.
+            results.addEventListener('click', (e) => { if (e.target.closest('.pitem')) dialog.close(); });
+
+            document.addEventListener('keydown', (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); open(); return; }
+                if (e.key === '/' && !isTyping(e.target) && !dialog.open) { e.preventDefault(); open(); }
+            });
+            document.getElementById('open-search').addEventListener('click', open);
+        })();
+    </script>
+    {% endif %}
+
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

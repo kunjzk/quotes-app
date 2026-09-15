@@ -3,83 +3,137 @@
 {% block title %}Shelf · ReadReadRead{% endblock %}
 
 {% block content %}
-<div class="min-h-screen p-8">
-    <div class="max-w-7xl mx-auto">
-        <!-- Header -->
-        <div class="mb-12">
-            <h1 class="text-3xl font-semibold mb-4">Shelf</h1>
-            <p class="italic" style="color: var(--grey);">
-                Spine height is quote count. Pull a book to open it.
-            </p>
-            
-            <div class="mt-6 font-mono text-sm uppercase tracking-wide" style="color: var(--grey);">
-                {{ total_books }} book{{ total_books|pluralize }} · {{ total_passages }} passage{{ total_passages|pluralize }}
-            </div>
-        </div>
-        
+<div class="shelf">
+    <div class="shelf-head">
+        <h1>Shelf</h1>
+        <span class="meta">{{ total_books }} book{{ total_books|pluralize }} · {{ total_passages }} passage{{ total_passages|pluralize }}</span>
         {% if books %}
-            <div class="flex flex-col lg:flex-row gap-8">
-                <!-- Bookshelf -->
-                <div class="lg:w-1/2">
-                    <div class="flex items-end justify-start space-x-2 pb-4 border-b-4" style="border-color: var(--ink);">
-                        {% for book_data in books %}
-                        <button
-                            class="book-spine {{ book_data.color }} relative cursor-pointer transition-all hover:opacity-80 hover:-translate-y-1"
-                            style="width: 60px; height: {{ book_data.height }}px; writing-mode: vertical-rl; text-orientation: mixed;"
-                            hx-get="{% url 'quotes:book_quotes' book_data.book.id %}"
-                            hx-target="#book-detail"
-                            hx-swap="innerHTML"
-                            onclick="selectBook(this, {{ forloop.counter0 }})"
-                            data-book-index="{{ forloop.counter0 }}"
-                        >
-                            <span class="text-white font-semibold text-sm px-2 py-2 block truncate" title="{{ book_data.book.title }}">
-                                {{ book_data.book.title }}
-                            </span>
-                            <span class="absolute bottom-2 left-1/2 transform -translate-x-1/2 text-white font-mono text-xs opacity-75">
-                                {{ book_data.book.quote_count }}
-                            </span>
-                        </button>
-                        {% endfor %}
-                    </div>
-                </div>
-                
-                <!-- Book Detail (slides out) -->
-                <div class="lg:w-1/2">
-                    <div id="book-detail" class="transition-all duration-300">
-                        <div class="text-center py-16" style="color: var(--grey);">
-                            <p class="italic">Select a book to view its passages</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        {% else %}
-            <!-- Empty State -->
-            <div class="text-center py-16">
-                <p class="text-xl mb-8" style="color: var(--grey);">
-                    Your shelf is empty. Start capturing quotes to build your library.
-                </p>
-                <a href="{% url 'quotes:capture' %}" 
-                   class="inline-block px-6 py-3 bg-teal text-white font-mono text-sm uppercase tracking-wide hover:opacity-90 transition-opacity">
-                    Capture your first quote
-                </a>
-            </div>
+        <label class="shelf-filter">
+            <input id="shelf-filter" type="search" value="{{ query|default:'' }}" placeholder="Filter passages, books, authors" autocomplete="off" spellcheck="false" aria-label="Filter passages">
+            <kbd>esc</kbd>
+        </label>
         {% endif %}
     </div>
-</div>
 
+    {% if books %}
+    <div class="shelf-body">
+        <div class="rack">
+            <div class="books" id="books">
+                {% for book_data in books %}
+                <button type="button"
+                        class="spine {{ book_data.color }}"
+                        style="height: {{ book_data.height }}px"
+                        title="{{ book_data.book.title }}"
+                        data-book-id="{{ book_data.book.id }}"
+                        data-url="{% url 'quotes:book_quotes' book_data.book.id %}"
+                        aria-pressed="{% if not query and book_data.book.id == selected_book.id %}true{% else %}false{% endif %}">
+                    <span class="t">{{ book_data.book.title }}</span>
+                    <span class="n">{{ book_data.book.quote_count }}</span>
+                </button>
+                {% endfor %}
+            </div>
+            <div class="rack-cap">Taller spines hold more passages</div>
+        </div>
+
+        <div id="book-detail" aria-live="polite">
+            {% if query %}
+                {% include 'quotes/partials/passage_results.html' %}
+            {% elif selected_book %}
+                {% include 'quotes/partials/book_quotes.html' with book=selected_book quotes=selected_quotes %}
+            {% endif %}
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding-left: 0">
+        <p>Your shelf is empty.</p>
+        <p class="hint"><a href="{% url 'quotes:capture' %}">Capture your first quote</a> to put a book on it.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if books %}
 <script>
-    let selectedBookIndex = -1;
-    
-    function selectBook(spine, index) {
-        // Remove previous selection
-        document.querySelectorAll('.book-spine').forEach(s => {
-            s.style.transform = '';
-            s.style.marginLeft = '';
+    (() => {
+        const detail = document.getElementById('book-detail');
+        const spines = [...document.querySelectorAll('.spine')];
+        const filter = document.getElementById('shelf-filter');
+        const shelfUrl = "{% url 'quotes:shelf' %}";
+        let requestId = 0;
+
+        async function load(url) {
+            const id = ++requestId;
+            detail.classList.add('loading');
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error();
+                const html = await response.text();
+                if (id !== requestId) return null;
+                detail.innerHTML = html;
+                return detail;
+            } catch {
+                if (id === requestId) toast('Could not load passages. Try again.', { error: true });
+                return null;
+            } finally {
+                if (id === requestId) detail.classList.remove('loading');
+            }
+        }
+
+        function markSpines(activeId, matchingIds) {
+            spines.forEach((spine) => {
+                const id = spine.dataset.bookId;
+                spine.setAttribute('aria-pressed', String(id === activeId));
+                spine.classList.toggle('dim', !!matchingIds && !matchingIds.includes(id));
+            });
+        }
+
+        spines.forEach((spine) => spine.addEventListener('click', async () => {
+            filter.value = '';
+            markSpines(spine.dataset.bookId, null);
+            history.replaceState(null, '', `${shelfUrl}?book=${spine.dataset.bookId}`);
+            if (await load(spine.dataset.url)) detail.scrollIntoView({ block: 'nearest' });
+        }));
+
+        let timer;
+        async function runFilter() {
+            const query = filter.value.trim();
+            if (!query) {
+                const active = spines.find((s) => s.getAttribute('aria-pressed') === 'true') || spines[0];
+                markSpines(active.dataset.bookId, null);
+                history.replaceState(null, '', `${shelfUrl}?book=${active.dataset.bookId}`);
+                await load(active.dataset.url);
+                return;
+            }
+            const params = new URLSearchParams({ q: query });
+            history.replaceState(null, '', `${shelfUrl}?${params}`);
+            params.set('partial', 'results');
+            if (await load(`${shelfUrl}?${params}`)) {
+                const matching = detail.firstElementChild?.dataset.matchingBooks;
+                markSpines(null, matching ? matching.split(',') : []);
+            }
+        }
+        filter.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(runFilter, 200);
         });
-        
-        // Highlight selected book (slide out slightly)
-        spine.style.transform = 'translateY(-8px) translateX(10px)';
-        selectedBookIndex = index;
-    }
+        filter.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && filter.value) {
+                e.preventDefault();
+                filter.value = '';
+                runFilter();
+            }
+        });
+
+        {% if query %}
+        markSpines(null, "{{ matching_book_ids|join:',' }}".split(',').filter(Boolean));
+        {% endif %}
+
+        document.addEventListener('submit', (e) => {
+            const message = e.target.dataset.confirm;
+            if (message && !confirm(message)) e.preventDefault();
+        });
+    })();
 </script>
+{% endif %}
 {% endblock %}

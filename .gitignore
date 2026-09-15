@@ -25,3 +25,8 @@ volume/
 *.pem
 *.key
 id_rsa*
+
+# Built assets
+node_modules/
+quotesapp/staticfiles/
+quotesapp/quotes/static/quotes/app.css

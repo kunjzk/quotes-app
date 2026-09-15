@@ -1,0 +1,38 @@
+{% for quote in quotes %}
+<article class="quote-page reading{% if forloop.first %} turn-in{% endif %}" data-page="{{ forloop.counter0 }}"{% if not forloop.first %} hidden{% endif %}>
+    <div class="folio">{% if quote.page_number %}p. {{ quote.page_number }}{% endif %}</div>
+    <div>
+        <blockquote class="q{% if quote.quote|length > 120 %} long{% endif %}">{{ quote.quote }}</blockquote>
+        <div class="attr">
+            <span class="title">{{ quote.book.title }}</span>
+            {% if quote.book.author %}<span class="author">{{ quote.book.author }}</span>{% endif %}
+        </div>
+        <div class="qactions">
+            <button type="button" data-copy="{{ quote.id }}">copy</button>
+            <a href="{% url 'quotes:shelf' %}?book={{ quote.book_id }}#q{{ quote.id }}">open in shelf</a>
+            <a href="{% url 'quotes:quote_edit' quote.id %}">edit</a>
+        </div>
+    </div>
+</article>
+{% empty %}
+<div class="empty-state">
+    <p>No passages match these criteria.</p>
+    <p class="hint">Pick another author or book above, or clear the filter.</p>
+</div>
+{% endfor %}
+
+{% if quotes|length > 1 %}
+<div class="pager">
+    <div class="turns">
+        <button type="button" id="prev-button" aria-label="Previous passage" disabled>←</button>
+        <span id="pos">1 of {{ quotes|length }}</span>
+        <button type="button" id="next-button" aria-label="Next passage">→</button>
+        <span class="segs" aria-hidden="true">{% for quote in quotes %}<i class="seg{% if forloop.first %} on{% endif %}"></i>{% endfor %}</span>
+    </div>
+    <div class="hints">
+        <span><kbd>←</kbd><kbd>→</kbd> turn</span>
+        <span><kbd>f</kbd> focus</span>
+        <span><kbd>/</kbd> search</span>
+    </div>
+</div>
+{% endif %}

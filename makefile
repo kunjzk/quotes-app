@@ -13,7 +13,7 @@ run-postgres: stop-postgres
 migrate: run-postgres
 	cd quotesapp && python manage.py makemigrations && python manage.py migrate
 
-runserver: migrate
+runserver: migrate css
 	cd quotesapp && python manage.py runserver
 
 test: run-postgres
@@ -36,6 +36,16 @@ run-redis: stop-redis
 
 run-celery-worker: run-redis run-postgres
 	cd quotesapp && celery -A quotesapp.celery.app worker -l info
+
+# Tailwind is compiled, not loaded from a CDN. Run once before `make runserver`,
+# or `make css-watch` in a second terminal while editing templates.
+TAILWIND = npx --yes tailwindcss@3.4.17 -c tailwind.config.js -i assets/app.css -o quotesapp/quotes/static/quotes/app.css
+
+css:
+	$(TAILWIND) --minify
+
+css-watch:
+	$(TAILWIND) --watch
 
 # To test image build in isolation
 build-image:

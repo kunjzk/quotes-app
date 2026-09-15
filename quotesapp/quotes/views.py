@@ -4,6 +4,7 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, T
 from .models import Quote, Book, User, TodayPreference
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from .forms import QuoteCreateForm, UserRegistrationForm
 from django.utils import timezone
 from django.contrib.auth import login
@@ -16,10 +17,12 @@ import re
 import csv
 import io
 from .services import (
+    books_on_shelf,
     create_quote,
     filter_quotes_for_today,
     get_today_preference,
     get_todays_quotes,
+    search_passages,
     suggest_today_values,
     update_today_preference,
 )
@@ -135,6 +138,9 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
                 "quote_id": quote.pk,
             }
         )
+        next_url = request.POST.get("next", "")
+        if url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+            return redirect(next_url)
         return redirect("quotes:quotes_list")
 
 
@@ -146,31 +152,29 @@ class TodayView(LoginRequiredMixin, TemplateView):
     from which author/book, is driven by the user's TodayPreference.
     """
     template_name = 'quotes/today.html'
-    
+    pages_template_name = 'quotes/partials/today_pages.html'
+
+    def get_template_names(self):
+        # The criteria sentence refetches just the passages after a change.
+        if self.request.GET.get('partial') == 'pages':
+            return [self.pages_template_name]
+        return [self.template_name]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
 
         preference = get_today_preference(user)
-        todays_quotes = get_todays_quotes(user, preference)
 
-        total_quotes = Quote.objects.filter(user=user).count()
-        matching_quotes = filter_quotes_for_today(user, preference.author, preference.book_title).count()
-        
-        # Calculate reading streak (days with quotes)
-        # Simple version: count total quotes / 3 (assuming 3 quotes per day)
-        streak = max(1, total_quotes // 3)
-        
-        context['quotes'] = todays_quotes
-        context['streak'] = streak
-        context['total_quotes'] = total_quotes
-        context['matching_quotes'] = matching_quotes
+        context['quotes'] = get_todays_quotes(user, preference)
+        context['total_quotes'] = Quote.objects.filter(user=user).count()
+        context['matching_quotes'] = filter_quotes_for_today(user, preference.author, preference.book_title).count()
         context['preference'] = preference
         context['is_filtered'] = bool(preference.author or preference.book_title)
         context['min_quote_count'] = TodayPreference.MIN_QUOTE_COUNT
         context['max_quote_count'] = TodayPreference.MAX_QUOTE_COUNT
         context['default_quote_count'] = TodayPreference.DEFAULT_QUOTE_COUNT
-        
+
         return context
 
 
@@ -258,11 +262,11 @@ class CaptureView(LoginRequiredMixin, TemplateView):
             attr = attribution_line.lstrip('—-').strip()
             
             # Check for page number pattern: "p. 123" or "p.123" or "page 123"
-            page_match = re.search(r'(?:p\.?|page)\s*(\d+)', attr, re.IGNORECASE)
+            page_match = re.search(r'\b(?:p\.?|page)\s*(\d+)', attr, re.IGNORECASE)
             if page_match:
                 page_number = int(page_match.group(1))
                 # Remove page number from attribution
-                attr = re.sub(r'\s*(?:p\.?|page)\s*\d+', '', attr, flags=re.IGNORECASE).strip()
+                attr = re.sub(r'\s*\b(?:p\.?|page)\s*\d+', '', attr, flags=re.IGNORECASE).strip()
             
             # Check for author pattern: "book | author"
             if '|' in attr:
@@ -272,93 +276,138 @@ class CaptureView(LoginRequiredMixin, TemplateView):
             else:
                 book_title = attr
         
-        # Try to find or create the book
-        book = None
-        if book_title:
-            # Try exact match first
-            book = Book.objects.filter(title__iexact=book_title).first()
-            
-            # If no book found and we have an author, create new book
-            if not book and author:
-                book = Book.objects.create(title=book_title, author=author)
-            elif not book:
-                # Just title, no author - create with empty author
-                book = Book.objects.create(title=book_title, author='')
-        
-        # Create the quote
+        # Match an existing book by title; otherwise create one. create_quote
+        # takes either an existing book or a new title + author, never both.
         try:
+            book = Book.objects.filter(title__iexact=book_title).first() if book_title else None
+            if book_title and not book and not author:
+                book = Book.objects.create(title=book_title, author='')
+
             result = create_quote(
-                quote=quote_text,
-                book=book,
-                title=book_title or '',
-                author=author or '',
-                page_number=page_number,
-                user=request.user
+                quote_text,
+                book,
+                None if book else book_title,
+                None if book else author,
+                page_number,
+                request.user,
             )
-            
-            if result.status == "success" or result.status == "quote_exists":
-                quote_id = result.existing_quote_id if result.status == "quote_exists" else Quote.objects.filter(user=request.user).latest('created_at').id
-                return JsonResponse({
-                    'success': True,
-                    'quote_id': quote_id,
-                    'message': 'Quote saved' if result.status == "success" else 'Quote already exists'
-                })
-            else:
-                return JsonResponse({'error': result.error_message}, status=400)
-                
         except Exception as e:
             logger.error(f"Error creating quote: {e}")
-            return JsonResponse({'error': str(e)}, status=500)
+            return JsonResponse({'error': 'Could not save the passage. Try again.'}, status=500)
+
+        if result.status == "form_error":
+            return JsonResponse({'error': result.error_message}, status=400)
+
+        return JsonResponse({
+            'success': True,
+            'quote_id': result.quote.id,
+            'book_title': result.quote.book.title,
+            'message': 'Quote saved' if result.status == "success" else 'Quote already exists',
+        })
 
 
 class ShelfView(LoginRequiredMixin, TemplateView):
     """Visual bookshelf showing all books as colored spines."""
     template_name = 'quotes/shelf.html'
-    
+    results_template_name = 'quotes/partials/passage_results.html'
+    spine_colors = ['spine-color-1', 'spine-color-2', 'spine-color-3',
+                    'spine-color-4', 'spine-color-5', 'spine-color-6']
+
+    def get_template_names(self):
+        # The shelf filter refetches just the results panel as you type.
+        if self.request.GET.get('partial') == 'results':
+            return [self.results_template_name]
+        return [self.template_name]
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
-        # Get all books that have quotes from this user
-        books = Book.objects.filter(
-            quote__user=self.request.user
-        ).annotate(
-            quote_count=Count('quote', filter=Q(quote__user=self.request.user))
-        ).filter(quote_count__gt=0).distinct().order_by('-quote_count', 'title')
-        
-        # Assign colors to books (cycle through 6 colors)
-        colors = ['spine-color-1', 'spine-color-2', 'spine-color-3', 
-                  'spine-color-4', 'spine-color-5', 'spine-color-6']
-        
-        books_with_colors = []
-        for i, book in enumerate(books):
-            books_with_colors.append({
+        user = self.request.user
+        query = self.request.GET.get('q', '').strip()
+
+        if query:
+            results = list(search_passages(user, query))
+            context['query'] = query
+            context['results'] = results
+            context['matching_book_ids'] = sorted({q.book_id for q in results})
+
+        if self.request.GET.get('partial') == 'results':
+            return context
+
+        books = list(books_on_shelf(user))
+        max_count = max((b.quote_count for b in books), default=1)
+        context['books'] = [
+            {
                 'book': book,
-                'color': colors[i % len(colors)],
-                'height': min(300, 80 + (book.quote_count * 20))  # Height based on quote count
-            })
-        
-        context['books'] = books_with_colors
+                'color': self.spine_colors[i % len(self.spine_colors)],
+                # Square-root scale relative to the fullest book, so a few very
+                # large books don't flatten everyone else to the same height.
+                'height': int(140 + 180 * (book.quote_count / max_count) ** 0.5),
+            }
+            for i, book in enumerate(books)
+        ]
         context['total_books'] = len(books)
-        context['total_passages'] = sum(b['book'].quote_count for b in books_with_colors)
-        
+        context['total_passages'] = sum(b.quote_count for b in books)
+
+        selected = None
+        requested = self.request.GET.get('book', '')
+        if requested.isdigit():
+            selected = next((b for b in books if b.id == int(requested)), None)
+        if selected is None and books:
+            selected = books[0]
+        context['selected_book'] = selected
+        if selected:
+            context['selected_quotes'] = self._quotes_for(selected)
+
         return context
+
+    def _quotes_for(self, book):
+        return Quote.objects.filter(book=book, user=self.request.user).order_by('page_number', 'id')
 
 
 class BookQuotesView(LoginRequiredMixin, TemplateView):
-    """HTMX endpoint: return quotes for a specific book."""
+    """Fragment: the passages panel for one book on the shelf."""
     template_name = 'quotes/partials/book_quotes.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        book_id = self.kwargs.get('pk')
-        
-        book = get_object_or_404(Book, pk=book_id)
-        quotes = Quote.objects.filter(book=book, user=self.request.user).order_by('page_number')
-        
+        book = get_object_or_404(Book, pk=self.kwargs.get('pk'))
         context['book'] = book
-        context['quotes'] = quotes
-        
+        context['quotes'] = Quote.objects.filter(book=book, user=self.request.user).order_by('page_number', 'id')
         return context
+
+
+class SearchView(LoginRequiredMixin, View):
+    """JSON search across the user's passages, books and authors for the search palette."""
+
+    passage_limit = 8
+    book_limit = 5
+
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        if len(query) < 2:
+            return JsonResponse({'passages': [], 'books': []})
+
+        passages = search_passages(request.user, query)[:self.passage_limit]
+        books = books_on_shelf(request.user).filter(
+            Q(title__icontains=query) | Q(author__icontains=query)
+        )[:self.book_limit]
+
+        return JsonResponse({
+            'passages': [
+                {
+                    'id': quote.id,
+                    'text': quote.quote[:240],
+                    'book': quote.book.title,
+                    'book_id': quote.book_id,
+                    'page': quote.page_number,
+                }
+                for quote in passages
+            ],
+            'books': [
+                {'id': book.id, 'title': book.title, 'author': book.author, 'count': book.quote_count}
+                for book in books
+            ],
+        })
 
 
 class BookSuggestView(LoginRequiredMixin, View):

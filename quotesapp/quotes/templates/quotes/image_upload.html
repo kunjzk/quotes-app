@@ -8,7 +8,7 @@
     <p class="lede">Photograph or upload a page. Select the passages you want from the extracted text.</p>
 
     <!-- Image Upload Section -->
-    <div class="mb-8 p-6 rounded-lg border-2 border-dashed" style="border-color: var(--teal);">
+    <div id="upload-step" class="mb-8 p-6 rounded-lg border-2 border-dashed" style="border-color: var(--teal);">
         <div class="text-center">
             <svg class="mx-auto h-12 w-12 mb-4" style="color: var(--grey);" stroke="currentColor" fill="none" viewBox="0 0 48 48">
                 <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -39,11 +39,30 @@
         </div>
     </div>
 
-    <!-- Image Preview -->
-    <div id="image-preview" class="hidden mb-8">
-        <h3 class="text-xl font-semibold mb-3">Image Preview</h3>
-        <div class="rounded-lg overflow-hidden border" style="border-color: var(--teal);">
-            <img id="preview-img" src="" alt="Preview" class="w-full max-h-96 object-contain" style="background-color: #f3f4f6;">
+    <!-- Crop Step -->
+    <div id="crop-step" class="crop-step" hidden>
+        <p class="crop-hint">Drag the corners to frame just the passage. Leave out the facing page and anything around the book.</p>
+        <div class="cropper-frame">
+            <div class="cropper" id="cropper">
+                <img id="crop-img" alt="Photo to crop" draggable="false">
+                <div class="crop-shade-clip" aria-hidden="true"><div class="crop-shade" id="crop-shade"></div></div>
+                <div class="crop-box" id="crop-box" tabindex="0" role="group"
+                     aria-label="Crop area. Arrow keys move it; Shift and arrow keys resize it.">
+                    <span class="crop-handle" data-handle="nw"></span>
+                    <span class="crop-handle" data-handle="n"></span>
+                    <span class="crop-handle" data-handle="ne"></span>
+                    <span class="crop-handle" data-handle="e"></span>
+                    <span class="crop-handle" data-handle="se"></span>
+                    <span class="crop-handle" data-handle="s"></span>
+                    <span class="crop-handle" data-handle="sw"></span>
+                    <span class="crop-handle" data-handle="w"></span>
+                </div>
+            </div>
+        </div>
+        <div class="crop-actions">
+            <button type="button" class="ghost" id="choose-again">Choose another photo</button>
+            <button type="button" class="ghost" id="reset-crop">Use whole photo</button>
+            <button type="button" class="save" id="read-text">Read text</button>
         </div>
     </div>
 
@@ -64,7 +83,7 @@
             <h3 class="text-xl font-semibold mb-3">Extracted Text</h3>
             <div id="confidence-warning" class="hidden mb-3 p-4 rounded-md" style="background-color: #fff7e6; border: 1px solid #c77d00; color: #7a4a00;">
                 <p class="font-semibold mb-1">This text looks unreliable (<span id="confidence-value"></span>% confidence)</p>
-                <p class="text-sm">Try retaking the photo with the page flat, the camera level, even lighting, and the text filling the frame. You can still select and edit what was found below.</p>
+                <p class="text-sm">Try cropping tighter to just the passage, or retake the photo with the page flat, the camera level and even lighting. You can still select and edit what was found below.</p>
             </div>
             <div id="extracted-text" class="p-4 rounded-lg font-serif text-lg leading-relaxed whitespace-pre-wrap border" style="border-color: var(--teal); background-color: rgba(45, 106, 106, 0.05);">
             </div>
@@ -152,20 +171,41 @@ let selectedQuotes = [];
 let bookTitleTimeout = null;
 let authorTimeout = null;
 
+let currentFile = null;
+
 function handleFileSelect(event) {
     const file = event.target.files[0];
+    event.target.value = '';  // choosing the same file again should still fire
     if (!file) return;
 
-    document.getElementById('image-preview').classList.remove('hidden');
-    document.getElementById('preview-img').src = URL.createObjectURL(file);
-    
+    currentFile = file;
+    document.getElementById('extracted-content').classList.add('hidden');
+    document.getElementById('error-message').classList.add('hidden');
+    document.getElementById('upload-step').classList.add('hidden');
+    document.getElementById('crop-step').hidden = false;
+    document.getElementById('read-text').textContent = 'Read text';
+    cropper.load(file);
+}
+
+function extractText() {
+    if (!currentFile) return;
+
     document.getElementById('extracted-content').classList.add('hidden');
     document.getElementById('error-message').classList.add('hidden');
     document.getElementById('loading').classList.remove('hidden');
-    
+    const readButton = document.getElementById('read-text');
+    readButton.disabled = true;
+
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('image', currentFile);
     formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    const crop = cropper.selection();
+    if (crop) {
+        formData.append('crop_x', crop.x.toFixed(4));
+        formData.append('crop_y', crop.y.toFixed(4));
+        formData.append('crop_w', crop.w.toFixed(4));
+        formData.append('crop_h', crop.h.toFixed(4));
+    }
 
     fetch('{% url "quotes:image_upload" %}', {
         method: 'POST',
@@ -188,6 +228,7 @@ function handleFileSelect(event) {
                 warning.classList.add('hidden');
             }
             document.getElementById('extracted-content').classList.remove('hidden');
+            readButton.textContent = 'Read again';
             selectedQuotes = [];
             updateQuotesList();
         } else {
@@ -197,8 +238,136 @@ function handleFileSelect(event) {
     .catch(error => {
         document.getElementById('loading').classList.add('hidden');
         showError('An error occurred: ' + error.message);
+    })
+    .finally(() => {
+        readButton.disabled = false;
     });
 }
+
+// Crop box over the photo preview. Works in fractions of the displayed image,
+// which the browser shows EXIF-rotated, the same way the server reads it.
+const cropper = (() => {
+    const MIN = 0.05;
+    const root = document.getElementById('cropper');
+    const img = document.getElementById('crop-img');
+    const box = document.getElementById('crop-box');
+    const shade = document.getElementById('crop-shade');
+    let rect = { x: 0, y: 0, w: 1, h: 1 };
+    let drag = null;
+    let objectUrl = null;
+
+    const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+    function render() {
+        for (const el of [box, shade]) {
+            el.style.left = `${rect.x * 100}%`;
+            el.style.top = `${rect.y * 100}%`;
+            el.style.width = `${rect.w * 100}%`;
+            el.style.height = `${rect.h * 100}%`;
+        }
+    }
+
+    function pointerFraction(e) {
+        const r = img.getBoundingClientRect();
+        return { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) };
+    }
+
+    // Resize by moving the named edges to the pointer, keeping the box inside
+    // the photo and at least MIN on each side.
+    function resize(handle, p, start) {
+        let left = start.x, top = start.y, right = start.x + start.w, bottom = start.y + start.h;
+        if (handle.includes('w')) left = clamp(p.x, 0, right - MIN);
+        if (handle.includes('e')) right = clamp(p.x, left + MIN, 1);
+        if (handle.includes('n')) top = clamp(p.y, 0, bottom - MIN);
+        if (handle.includes('s')) bottom = clamp(p.y, top + MIN, 1);
+        return { x: left, y: top, w: right - left, h: bottom - top };
+    }
+
+    root.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const p = pointerFraction(e);
+        const handle = e.target.dataset.handle;
+        if (handle) {
+            drag = { mode: 'resize', handle, start: { ...rect } };
+        } else if (e.target === box) {
+            drag = { mode: 'move', origin: p, start: { ...rect } };
+        } else {
+            // Press outside the box to draw a new one from that point.
+            drag = { mode: 'draw', origin: p, start: { ...rect } };
+        }
+        root.setPointerCapture(e.pointerId);
+    });
+
+    root.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        const p = pointerFraction(e);
+        if (drag.mode === 'resize') {
+            rect = resize(drag.handle, p, drag.start);
+        } else if (drag.mode === 'move') {
+            rect = {
+                ...drag.start,
+                x: clamp(drag.start.x + p.x - drag.origin.x, 0, 1 - drag.start.w),
+                y: clamp(drag.start.y + p.y - drag.origin.y, 0, 1 - drag.start.h),
+            };
+        } else {
+            const x = Math.min(p.x, drag.origin.x), y = Math.min(p.y, drag.origin.y);
+            rect = { x, y, w: Math.abs(p.x - drag.origin.x), h: Math.abs(p.y - drag.origin.y) };
+        }
+        render();
+    });
+
+    function endDrag() {
+        if (drag && drag.mode === 'draw' && (rect.w < MIN || rect.h < MIN)) {
+            rect = drag.start;  // a tap, not a drag
+            render();
+        }
+        drag = null;
+    }
+    root.addEventListener('pointerup', endDrag);
+    root.addEventListener('pointercancel', endDrag);
+
+    box.addEventListener('keydown', (e) => {
+        const step = 0.01;
+        const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+        if (!delta) return;
+        e.preventDefault();
+        if (e.shiftKey) {
+            rect = { ...rect, w: clamp(rect.w + delta[0], MIN, 1 - rect.x), h: clamp(rect.h + delta[1], MIN, 1 - rect.y) };
+        } else {
+            rect = { ...rect, x: clamp(rect.x + delta[0], 0, 1 - rect.w), y: clamp(rect.y + delta[1], 0, 1 - rect.h) };
+        }
+        render();
+    });
+
+    return {
+        load(file) {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            objectUrl = URL.createObjectURL(file);
+            img.src = objectUrl;
+            this.reset();
+        },
+        reset() {
+            rect = { x: 0, y: 0, w: 1, h: 1 };
+            render();
+        },
+        // null when the whole photo is selected, so nothing is cropped.
+        selection() {
+            const whole = rect.x < 0.005 && rect.y < 0.005 && rect.w > 0.99 && rect.h > 0.99;
+            return whole ? null : { ...rect };
+        },
+    };
+})();
+
+document.getElementById('read-text').addEventListener('click', extractText);
+document.getElementById('reset-crop').addEventListener('click', () => cropper.reset());
+document.getElementById('choose-again').addEventListener('click', () => {
+    currentFile = null;
+    document.getElementById('crop-step').hidden = true;
+    document.getElementById('extracted-content').classList.add('hidden');
+    document.getElementById('error-message').classList.add('hidden');
+    document.getElementById('upload-step').classList.remove('hidden');
+});
 
 function showError(message) {
     document.getElementById('error-text').textContent = message;
@@ -249,7 +418,7 @@ function updateQuotesList() {
                 <span class="font-mono text-sm" style="color: var(--grey);">Quote ${index + 1}</span>
                 <button onclick="removeQuote(${quote.id})" class="text-red-600 hover:text-red-800 text-sm font-mono uppercase">Remove</button>
             </div>
-            <p class="font-serif leading-relaxed">${quote.text}</p>
+            <p class="font-serif leading-relaxed" style="white-space: pre-line">${escapeHtml(quote.text)}</p>
         </div>
     `).join('');
 }

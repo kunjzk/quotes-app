@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.db.models import Count, Q
 import logging
+import math
 import re
 import csv
 import io
@@ -597,11 +598,16 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
             }, status=400)
         
         try:
-            result = OCRService.extract_text_from_image(image_file)
+            crop = self._parse_crop(request.POST)
+        except ValueError as e:
+            return JsonResponse({'error': str(e)}, status=400)
+
+        try:
+            result = OCRService.extract_text_from_image(image_file, crop=crop)
             
             if not result:
                 return JsonResponse({
-                    'error': 'No text could be extracted from the image. Please try a clearer image.'
+                    'error': 'No text could be found. Try a clearer photo, or crop to just the page.'
                 }, status=400)
             
             cleaned_text = OCRService.preprocess_extracted_text(result.text)
@@ -628,6 +634,36 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
         except Exception as e:
             logger.error(f"Image upload error: {e}", exc_info=True)
             return JsonResponse({'error': f'Failed to process image: {str(e)}'}, status=500)
+
+    # A crop smaller than this (as a fraction of each side) is almost
+    # certainly a mis-tap rather than a deliberate selection.
+    MIN_CROP_FRACTION = 0.02
+
+    @classmethod
+    def _parse_crop(cls, data):
+        """
+        Read the optional crop box (crop_x, crop_y, crop_w, crop_h), each a
+        fraction of the photo as shown in the browser. Returns None when absent.
+        """
+        names = ('crop_x', 'crop_y', 'crop_w', 'crop_h')
+        raw = [data.get(name, '').strip() for name in names]
+        if not any(raw):
+            return None
+        try:
+            x, y, w, h = (float(value) for value in raw)
+        except ValueError:
+            raise ValueError('The crop area is invalid. Choose the photo again and reselect the area.')
+        if not all(math.isfinite(v) for v in (x, y, w, h)):
+            raise ValueError('The crop area is invalid. Choose the photo again and reselect the area.')
+
+        # Allow for rounding in the browser, then clamp into the photo.
+        eps = 0.001
+        if x < -eps or y < -eps or x + w > 1 + eps or y + h > 1 + eps:
+            raise ValueError('The crop area goes outside the photo. Reselect the area.')
+        if w < cls.MIN_CROP_FRACTION or h < cls.MIN_CROP_FRACTION:
+            raise ValueError('The crop area is too small. Drag the corners to include the passage.')
+        x, y = max(0.0, x), max(0.0, y)
+        return (x, y, min(w, 1 - x), min(h, 1 - y))
 
 
 # Leaving here as a reference for the basic form view

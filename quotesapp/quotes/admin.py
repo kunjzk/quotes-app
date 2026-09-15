@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Book, Quote
+from .models import User, Source, Quote
 from .forms import QuotesUserCreationForm, QuotesUserChangeForm
 
 
@@ -17,16 +17,16 @@ class QuotesUserAdmin(UserAdmin):
     )
 
 
-@admin.register(Book)
-class BookAdmin(admin.ModelAdmin):
-    list_display = ("title", "author", "created_at")
+@admin.register(Source)
+class SourceAdmin(admin.ModelAdmin):
+    list_display = ("title", "creator", "created_at")
 
 
 @admin.register(Quote)
 class QuoteAdmin(admin.ModelAdmin):
-    list_display = ("quote", "book", "user", "page_number", "created_at", "deleted_at")
+    list_display = ("quote", "source", "user", "page_number", "timestamp_seconds", "created_at", "deleted_at")
     search_fields = ("quote",)
-    list_filter = ("book", "user")
+    list_filter = ("source", "user")
     
     def get_queryset(self, request):
         return Quote.all_objects.all()

@@ -12,7 +12,7 @@ import re
 from django.core.management.base import BaseCommand, CommandError
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from quotes.models import Book, Quote
+from quotes.models import Source, Quote
 
 User = get_user_model()
 
@@ -93,34 +93,34 @@ class Command(BaseCommand):
         # Clean book title
         # Format: "Author - Title_With_Underscores-Publisher (Year)"
         # We want just the title part
-        book_title = self._clean_book_title(full_title)
+        title = self._clean_book_title(full_title)
         
         # Clean author name
         # Format: "Last, First" -> "First Last"
-        author = self._clean_author_name(author_str)
+        creator = self._clean_author_name(author_str)
         
         if dry_run:
             self.stdout.write(
                 f'Would import: "{quote_text[:60]}..." '
-                f'from "{book_title}" by {author}'
+                f'from "{title}" by {creator}'
             )
             return 'imported'
         
-        # Get or create book
+        # Get or create the source
         with transaction.atomic():
-            book, created = Book.objects.get_or_create(
-                title=book_title,
-                author=author,
+            source, created = Source.objects.get_or_create(
+                title=title,
+                creator=creator,
                 defaults={
-                    'title': book_title,
-                    'author': author
+                    'title': title,
+                    'creator': creator
                 }
             )
             
             # Check if quote already exists
             existing = Quote.objects.filter(
                 quote=quote_text,
-                book=book,
+                source=source,
                 user=user
             ).exists()
             
@@ -130,14 +130,14 @@ class Command(BaseCommand):
             # Create quote
             Quote.objects.create(
                 quote=quote_text,
-                book=book,
+                source=source,
                 user=user,
                 page_number=None  # Readwise doesn't include page numbers
             )
             
             if created:
                 self.stdout.write(
-                    self.style.SUCCESS(f'✓ Created book: {book_title} by {author}')
+                    self.style.SUCCESS(f'✓ Created book: {title} by {creator}')
                 )
         
         return 'imported'

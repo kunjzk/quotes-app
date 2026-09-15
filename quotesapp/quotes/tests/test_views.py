@@ -1,7 +1,7 @@
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
-from quotes.models import Book, Quote
+from quotes.models import Source, Quote
 from unittest.mock import patch
 from django.db import DatabaseError
 
@@ -23,9 +23,9 @@ class QuoteCreateViewTest(TestCase):
             email='poster@example.com',
             password='pw'
         )
-        self.book = Book.objects.create(
+        self.source = Source.objects.create(
             title="Pragmatic Programmer", 
-            author="Hunt/Thomas"
+            creator="Hunt/Thomas"
         )
     
     def test_create_view_happy_path(self):
@@ -34,7 +34,7 @@ class QuoteCreateViewTest(TestCase):
         """
         assert self.client.login(username="poster", password="pw")
         payload = {
-            "book": self.book.id,
+            "source": self.source.id,
             "quote": "Stone by stone.",
             "page_number": 100
         }
@@ -50,7 +50,7 @@ class QuoteCreateViewTest(TestCase):
         assert self.client.login(username="poster", password="pw")
         
         payload = {
-            "book": self.book.id, 
+            "source": self.source.id, 
             "quote": "Stone by stone.", 
             "page_number": ""
         }
@@ -66,7 +66,7 @@ class QuoteCreateViewTest(TestCase):
         # Exactly one row should exist
         quote_count = Quote.objects.filter(
             user=self.user, 
-            book=self.book, 
+            source=self.source, 
             quote="Stone by stone."
         ).count()
         self.assertEqual(quote_count, 1)
@@ -77,7 +77,7 @@ class QuoteCreateViewTest(TestCase):
         """
         assert self.client.login(username="poster", password="pw")
         payload = {
-            "book": "",
+            "source": "",
             "quote": "Stone by stone.",
             "page_number": ""
         }
@@ -91,9 +91,9 @@ class QuoteCreateViewTest(TestCase):
         """
         assert self.client.login(username="poster", password="pw")
         payload = {
-            "book": self.book.id,
+            "source": self.source.id,
             "title": "Pragmatic Programmer",
-            "author": "Hunt/Thomas",
+            "creator": "Hunt/Thomas",
             "quote": "Stone by stone.",
             "page_number": 100
         }
@@ -108,12 +108,12 @@ class QuoteCreateViewTest(TestCase):
         assert self.client.login(username="poster", password="pw")
         
         # Count initial state
-        initial_book_count = Book.objects.count()
+        initial_source_count = Source.objects.count()
         initial_quote_count = Quote.objects.count()
         
         payload = {
             "title": "a"*256,  # Too long - will cause validation error
-            "author": "Hunt/Thomas",
+            "creator": "Hunt/Thomas",
             "quote": "Stone by stone.",
             "page_number": 100
         }
@@ -123,7 +123,7 @@ class QuoteCreateViewTest(TestCase):
         self.assertEqual(resp.status_code, 200)  # Form redisplayed with errors
         
         # Verify atomicity - nothing should be created
-        self.assertEqual(Book.objects.count(), initial_book_count)
+        self.assertEqual(Source.objects.count(), initial_source_count)
         self.assertEqual(Quote.objects.count(), initial_quote_count)
         
         # Verify error message is shown
@@ -152,10 +152,10 @@ class QuoteListViewTest(TestCase):
             password='pw'
         )
         
-        # Create a book
-        self.book = Book.objects.create(
+        # Create a source
+        self.source = Source.objects.create(
             title="Grokking Algorithms", 
-            author="Bhargava"
+            creator="Bhargava"
         )
     
     def test_list_view_scopes_to_current_user(self):
@@ -165,12 +165,12 @@ class QuoteListViewTest(TestCase):
         # Create quotes for both users
         q1 = Quote.objects.create(
             user=self.user1, 
-            book=self.book, 
+            source=self.source, 
             quote="Greedy stays greedy."
         )
         Quote.objects.create(
             user=self.user2, 
-            book=self.book, 
+            source=self.source, 
             quote="Graphs are friends."
         )
 

@@ -789,6 +789,12 @@ dialog.palette::backdrop { background: var(--backdrop); backdrop-filter: blur(3p
     animation: none !important;
     transition: none !important;
   }
+  /* The universal selector doesn't reach these, so page and palette changes
+     would keep crossfading. */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
+  }
 }
 
 [hidden] {

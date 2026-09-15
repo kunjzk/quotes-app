@@ -6,6 +6,7 @@ from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from .forms import QuoteCreateForm, UserRegistrationForm
 from django.utils import timezone
+from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
@@ -520,21 +521,10 @@ class RegisterView(CreateView):
     
     def form_valid(self, form):
         response = super().form_valid(form)
-        # Log the user in after registration
-        login(self.request, self.object)
-        return response
-
-
-class RegisterView(CreateView):
-    """User registration view."""
-    template_name = 'registration/register.html'
-    form_class = UserRegistrationForm
-    success_url = reverse_lazy('quotes:today')
-    
-    def form_valid(self, form):
-        response = super().form_valid(form)
-        # Log the user in after registration
-        login(self.request, self.object)
+        # Log the user in after registration. The user didn't come from
+        # authenticate(), so name the backend explicitly; login() requires it
+        # once more than one backend is configured.
+        login(self.request, self.object, backend='django.contrib.auth.backends.ModelBackend')
         return response
 
 

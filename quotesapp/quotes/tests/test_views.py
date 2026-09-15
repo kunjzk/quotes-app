@@ -184,3 +184,38 @@ class QuoteListViewTest(TestCase):
         self.assertEqual(len(quotes_in_context), 1)
         self.assertEqual(quotes_in_context[0].id, q1.id)
         self.assertEqual(quotes_in_context[0].quote, "Greedy stays greedy.")
+
+
+class RegisterViewTest(TestCase):
+    def test_registration_creates_user_and_logs_them_in(self):
+        payload = {
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "password": "analytical-engine",
+            "password_confirm": "analytical-engine",
+        }
+        resp = self.client.post(reverse("register"), payload)
+
+        self.assertRedirects(resp, reverse("quotes:today"), fetch_redirect_response=False)
+        user = User.objects.get(email="ada@example.com")
+        self.assertEqual(user.username, "ada")
+        self.assertTrue(user.check_password("analytical-engine"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), user.pk)
+
+        # The session is usable: the login-protected Today page loads.
+        self.assertEqual(self.client.get(reverse("quotes:today")).status_code, 200)
+
+    def test_mismatched_passwords_do_not_create_a_user(self):
+        payload = {
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+            "email": "ada@example.com",
+            "password": "analytical-engine",
+            "password_confirm": "difference-engine",
+        }
+        resp = self.client.post(reverse("register"), payload)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(User.objects.filter(email="ada@example.com").exists())
+        self.assertNotIn("_auth_user_id", self.client.session)

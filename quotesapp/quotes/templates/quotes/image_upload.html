@@ -1,13 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Photo Capture - ReadReadRead{% endblock %}
+{% block title %}Photo · Capture · ReadReadRead{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-    <div class="mb-8">
-        <h1 class="text-4xl font-semibold mb-2">Photo Capture</h1>
-        <p class="text-lg" style="color: var(--grey);">Take a photo or upload an image of text to extract quotes</p>
-    </div>
+<div class="capture capture-panel">
+    {% include 'quotes/partials/capture_modes.html' %}
+    <p class="lede">Photograph or upload a page. Select the passages you want from the extracted text.</p>
 
     <!-- Image Upload Section -->
     <div class="mb-8 p-6 rounded-lg border-2 border-dashed" style="border-color: var(--teal);">

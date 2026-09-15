@@ -3,374 +3,292 @@
 {% block title %}Capture · ReadReadRead{% endblock %}
 
 {% block content %}
-<div class="h-full flex items-center justify-center p-8">
-    <div class="max-w-3xl w-full">
-        <!-- Header -->
-        <div class="mb-12">
-            <h1 class="text-3xl font-semibold mb-4">Capture</h1>
-            <p class="italic" style="color: var(--grey);">
-                One sheet, no form fields. The attribution line parses as you type.
-            </p>
-        </div>
-        
-        <!-- Capture Form -->
-        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8" style="background-color: var(--paper); border: 1px solid var(--ink); opacity: 0.95;">
-            <form id="capture-form" class="space-y-6">
-                {% csrf_token %}
-                
-                <!-- Success Message -->
-                <div id="success-message" class="hidden p-4 mb-4 rounded" style="background-color: var(--teal); color: var(--paper);">
-                    <p class="font-mono text-sm">✓ Quote saved</p>
-                </div>
-                
-                <!-- Error Message -->
-                <div id="error-message" class="hidden p-4 mb-4 rounded" style="background-color: #dc2626; color: white;">
-                    <p class="font-mono text-sm"></p>
-                </div>
-                
-                <!-- Quote Input -->
-                <div>
-                    <div class="flex justify-between items-center mb-2">
-                        <label class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
-                            NEW PASSAGE
-                        </label>
-                        <button
-                            type="button"
-                            id="voice-button"
-                            class="flex items-center gap-2 px-3 py-1 rounded font-mono text-xs uppercase tracking-wide transition-all"
-                            style="background-color: var(--teal); color: var(--paper);"
-                            title="Click to start voice recording"
-                        >
-                            <svg id="mic-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                            </svg>
-                            <span id="voice-status">Voice</span>
-                        </button>
-                    </div>
-                    <textarea
-                        id="quote-input"
-                        name="content"
-                        rows="8"
-                        class="w-full p-4 text-xl leading-relaxed border-none focus:outline-none focus:ring-0 resize-none"
-                        style="background-color: transparent; color: var(--ink);"
-                        placeholder="I went to the woods because I wished to live deliberately, to front only the essential facts of life.
+<div class="capture">
+    {% include 'quotes/partials/capture_modes.html' %}
 
-— walden | Henry David Thoreau | p. 90"
-                        autofocus
-                    ></textarea>
-                </div>
-                
-                <!-- Voice Recording Status -->
-                <div id="voice-message" class="hidden p-4 rounded" style="background-color: var(--teal); color: var(--paper);">
-                    <p class="font-mono text-sm">
-                        <span id="voice-message-text">🎤 Recording... Click stop when done</span>
-                    </p>
-                </div>
-                
-                <!-- Helper Text -->
-                <div class="text-sm italic" style="color: var(--grey);">
-                    <p>End with an attribution line like:</p>
-                    <ul class="list-disc list-inside ml-4 mt-2 space-y-1 font-mono text-xs">
-                        <li>— walden p. 90</li>
-                        <li>— meditations | Marcus Aurelius</li>
-                        <li>— The Great Gatsby | F. Scott Fitzgerald | p. 180</li>
-                    </ul>
-                </div>
-                
-                <!-- Book Suggestion (shown when typing) -->
-                <div id="book-suggestion" class="hidden p-4 rounded" style="background-color: var(--paper); border: 1px solid var(--teal);">
-                    <p class="font-mono text-sm mb-2" style="color: var(--grey);">
-                        + new book "<span id="suggested-title"></span>"
-                    </p>
-                </div>
-                
-                <!-- Submit Button -->
-                <div class="flex justify-between items-center pt-4">
-                    <button
-                        type="button"
-                        onclick="clearForm()"
-                        class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors"
-                        style="color: var(--grey);"
-                    >
-                        clear
-                    </button>
-                    
-                    <button
-                        type="submit"
-                        id="save-button"
-                        class="px-8 py-3 font-mono text-sm uppercase tracking-wide text-white transition-all hover:opacity-90"
-                        style="background-color: var(--teal);"
-                    >
-                        Underline & save ↵
-                    </button>
-                </div>
-            </form>
+    <form id="capture-form" data-suggest-url="{% url 'quotes:book_suggest' %}" data-shelf-url="{% url 'quotes:shelf' %}">
+        {% csrf_token %}
+        <div class="sheet">
+            <textarea id="quote-input" name="content" rows="6" placeholder="Paste or type a passage" aria-label="Passage" autofocus></textarea>
+
+            <div class="attrline">
+                <span class="dash" aria-hidden="true">—</span>
+                <input id="attr-input" type="text" placeholder="book | author | p. 42" autocomplete="off" spellcheck="false"
+                       aria-label="Book, author and page" aria-autocomplete="list" aria-controls="book-pop">
+                <div class="book-pop" id="book-pop" role="listbox" hidden></div>
+            </div>
+            <div class="parsed" id="parsed" aria-live="polite"></div>
         </div>
-    </div>
+
+        <div class="capfoot">
+            <button type="button" class="ghost" id="clear-button">Clear</button>
+            <button type="submit" class="save" id="save-button">Save passage <kbd>⌘↵</kbd></button>
+        </div>
+    </form>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
 <script>
-    const form = document.getElementById('capture-form');
-    const input = document.getElementById('quote-input');
-    const saveButton = document.getElementById('save-button');
-    const successMessage = document.getElementById('success-message');
-    const errorMessage = document.getElementById('error-message');
-    const bookSuggestion = document.getElementById('book-suggestion');
-    const suggestedTitle = document.getElementById('suggested-title');
-    
-    // Parse attribution as user types
-    input.addEventListener('input', () => {
-        const content = input.value;
-        const lines = content.split('\n');
-        
-        if (lines.length > 0) {
-            const lastLine = lines[lines.length - 1].trim();
-            
-            // Check if last line looks like attribution
-            if (lastLine.startsWith('—') || lastLine.startsWith('-')) {
-                const attr = lastLine.replace(/^[—\-]\s*/, '');
-                const bookMatch = attr.split(/\s*\|\s*/)[0].replace(/\s*p\.\s*\d+/, '').trim();
-                
-                if (bookMatch && bookMatch.length > 2) {
-                    suggestedTitle.textContent = bookMatch;
-                    bookSuggestion.classList.remove('hidden');
-                } else {
-                    bookSuggestion.classList.add('hidden');
-                }
-            } else {
-                bookSuggestion.classList.add('hidden');
+    (() => {
+        const form = document.getElementById('capture-form');
+        const textInput = document.getElementById('quote-input');
+        const attrInput = document.getElementById('attr-input');
+        const pop = document.getElementById('book-pop');
+        const parsed = document.getElementById('parsed');
+        const saveButton = document.getElementById('save-button');
+        const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+
+        if (/Mac|iPhone|iPad/.test(navigator.platform) === false) {
+            saveButton.querySelector('kbd').textContent = 'Ctrl ↵';
+        }
+
+        // Mirrors CaptureView's parser: "title | author | p. 42", every part but the title optional.
+        function parseAttribution(value) {
+            let rest = value.trim().replace(/^[—-]\s*/, '');
+            let page = null;
+            const pageMatch = rest.match(/\b(?:p\.?|page)\s*(\d+)/i);
+            if (pageMatch) {
+                page = pageMatch[1];
+                rest = rest.replace(/\s*\b(?:p\.?|page)\s*\d+/gi, '').trim();
             }
+            const [title = '', author = ''] = rest.split('|').map((part) => part.trim());
+            return { title, author, page };
         }
-    });
-    
-    // Handle form submission
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const content = input.value.trim();
-        
-        if (!content) {
-            showError('Please enter a quote');
-            return;
-        }
-        
-        // Disable button during submission
-        saveButton.disabled = true;
-        saveButton.style.opacity = '0.5';
-        saveButton.textContent = 'Saving...';
-        
-        try {
-            const response = await fetch('{% url "quotes:capture" %}', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                },
-                body: new URLSearchParams({
-                    content: content
-                })
-            });
-            
-            const data = await response.json();
-            
-            if (response.ok && data.success) {
-                // Show success with ink underline animation
-                showSuccess();
-                
-                // Add ink underline animation to the textarea
-                input.classList.add('ink-underline');
-                
-                // Clear form after short delay
-                setTimeout(() => {
-                    clearForm();
-                    input.classList.remove('ink-underline');
-                }, 1500);
-            } else {
-                showError(data.error || 'Failed to save quote');
+
+        let suggestions = [];
+        let highlighted = -1;
+        let requestId = 0;
+        let debounce;
+
+        function renderParsed() {
+            const { title, author, page } = parseAttribution(attrInput.value);
+            if (!title) {
+                parsed.innerHTML = '<span>Book, then optionally author and page. Only the book is required.</span>';
+                return;
             }
-        } catch (error) {
-            showError('Network error. Please try again.');
-        } finally {
-            // Re-enable button
-            saveButton.disabled = false;
-            saveButton.style.opacity = '1';
-            saveButton.textContent = 'Underline & save ↵';
+            const known = suggestions.find((s) => s.title.toLowerCase() === title.toLowerCase());
+            const bits = [];
+            if (known) {
+                bits.push('<span class="dot"></span>', `<span>${escapeHtml(known.title)}</span>`);
+                if (known.author) bits.push('<span>·</span>', `<span>${escapeHtml(known.author)}</span>`);
+            } else {
+                bits.push('<span class="new">New to your shelf</span>', `<span>${escapeHtml(title)}</span>`);
+                if (author) bits.push('<span>·</span>', `<span>${escapeHtml(author)}</span>`);
+            }
+            if (page) bits.push('<span>·</span>', `<span>p. ${escapeHtml(page)}</span>`);
+            parsed.innerHTML = bits.join('');
         }
-    });
-    
-    // Keyboard shortcut: Cmd/Ctrl + Enter to submit
-    input.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+
+        function closePop() {
+            pop.hidden = true;
+            highlighted = -1;
+        }
+
+        function renderPop() {
+            const { title } = parseAttribution(attrInput.value);
+            const options = suggestions.filter((s) => s.title.toLowerCase() !== title.toLowerCase());
+            if (!title || !options.length || document.activeElement !== attrInput) {
+                closePop();
+                return;
+            }
+            pop.innerHTML = options.map((s, i) => `
+                <button type="button" role="option" data-title="${escapeHtml(s.title)}" class="${i === highlighted ? 'hi' : ''}">
+                    <span>${escapeHtml(s.title)}</span><span>${escapeHtml(s.author || 'Unknown author')}</span>
+                </button>`).join('');
+            pop.hidden = false;
+        }
+
+        async function loadSuggestions() {
+            const { title } = parseAttribution(attrInput.value);
+            const id = ++requestId;
+            if (title.length < 2) {
+                suggestions = [];
+                renderPop();
+                renderParsed();
+                return;
+            }
+            try {
+                const response = await fetch(`${form.dataset.suggestUrl}?q=${encodeURIComponent(title)}`, { headers: { Accept: 'application/json' } });
+                if (!response.ok) return;
+                const data = await response.json();
+                if (id !== requestId) return;
+                suggestions = data.suggestions || [];
+            } catch {
+                suggestions = [];
+            }
+            renderPop();
+            renderParsed();
+        }
+
+        function chooseBook(title) {
+            const { page } = parseAttribution(attrInput.value);
+            attrInput.value = title + (page ? ` p. ${page}` : '');
+            closePop();
+            renderParsed();
+        }
+
+        attrInput.addEventListener('input', () => {
+            highlighted = -1;
+            renderParsed();
+            clearTimeout(debounce);
+            debounce = setTimeout(loadSuggestions, 150);
+        });
+        attrInput.addEventListener('focus', renderPop);
+        attrInput.addEventListener('blur', () => setTimeout(closePop, 120));
+        attrInput.addEventListener('keydown', (e) => {
+            const options = [...pop.querySelectorAll('button')];
+            if (pop.hidden || !options.length) return;
+            if (e.key === 'ArrowDown') { e.preventDefault(); highlighted = (highlighted + 1) % options.length; renderPop(); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); highlighted = (highlighted - 1 + options.length) % options.length; renderPop(); }
+            else if (e.key === 'Enter' && highlighted >= 0 && !(e.metaKey || e.ctrlKey)) { e.preventDefault(); chooseBook(options[highlighted].dataset.title); }
+            else if (e.key === 'Escape') { e.preventDefault(); closePop(); }
+        });
+        pop.addEventListener('mousedown', (e) => {
+            const option = e.target.closest('button');
+            if (!option) return;
             e.preventDefault();
-            form.dispatchEvent(new Event('submit'));
+            chooseBook(option.dataset.title);
+        });
+
+        function clearForm() {
+            textInput.value = '';
+            attrInput.value = '';
+            suggestions = [];
+            closePop();
+            renderParsed();
+            textInput.focus();
         }
-    });
-    
-    function showSuccess() {
-        successMessage.classList.remove('hidden');
-        errorMessage.classList.add('hidden');
-        
-        setTimeout(() => {
-            successMessage.classList.add('hidden');
-        }, 3000);
-    }
-    
-    function showError(message) {
-        errorMessage.querySelector('p').textContent = message;
-        errorMessage.classList.remove('hidden');
-        successMessage.classList.add('hidden');
-    }
-    
-    function clearForm() {
-        input.value = '';
-        bookSuggestion.classList.add('hidden');
-        successMessage.classList.add('hidden');
-        errorMessage.classList.add('hidden');
-        input.focus();
-    }
+        document.getElementById('clear-button').addEventListener('click', clearForm);
+
+        // A pasted passage that ends with "— book | author" fills in the attribution line.
+        textInput.addEventListener('paste', () => setTimeout(() => {
+            const lines = textInput.value.trimEnd().split('\n');
+            const last = lines[lines.length - 1].trim();
+            if (lines.length > 1 && /^[—-]\s*\S/.test(last) && !attrInput.value.trim()) {
+                attrInput.value = last.replace(/^[—-]\s*/, '');
+                textInput.value = lines.slice(0, -1).join('\n').trimEnd();
+                loadSuggestions();
+            }
+        }));
+
+        async function save() {
+            const text = textInput.value.trim();
+            const { title } = parseAttribution(attrInput.value);
+            if (!text) { toast('Add the passage text first', { error: true }); textInput.focus(); return; }
+            if (!title) { toast('Add a book on the attribution line', { error: true }); attrInput.focus(); return; }
+
+            saveButton.disabled = true;
+            try {
+                const response = await fetch(window.location.pathname, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
+                    body: new URLSearchParams({ content: `${text}\n— ${attrInput.value.trim()}` }),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || 'Could not save the passage. Try again.');
+                toast(data.message === 'Quote already exists'
+                    ? `Already on your shelf in ${data.book_title}`
+                    : `Saved to ${data.book_title}`);
+                // Keep the attribution so several passages from one book are quick to add.
+                textInput.value = '';
+                textInput.focus();
+            } catch (err) {
+                toast(err.message, { error: true });
+            } finally {
+                saveButton.disabled = false;
+            }
+        }
+
+        form.addEventListener('submit', (e) => { e.preventDefault(); save(); });
+        [textInput, attrInput].forEach((el) => el.addEventListener('keydown', (e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); save(); }
+        }));
+
+        renderParsed();
+        if (location.hash === '#voice') document.getElementById('voice-button').focus();
+    })();
 </script>
 
-<!-- Voice Input with browser-whisper -->
 <script type="module">
-    import { BrowserWhisper } from 'https://esm.sh/browser-whisper@1.0.1';
-    
+    // Voice dictation. The Whisper library and model load on first use, not on page load.
     const voiceButton = document.getElementById('voice-button');
     const voiceStatus = document.getElementById('voice-status');
-    const voiceMessage = document.getElementById('voice-message');
-    const voiceMessageText = document.getElementById('voice-message-text');
     const input = document.getElementById('quote-input');
-    
+
+    let whisper = null;
     let mediaRecorder = null;
     let audioChunks = [];
-    let whisper = null;
-    let isRecording = false;
-    
-    // Initialize Whisper (lazy load)
+    let recording = false;
+
+    function setRecording(on) {
+        recording = on;
+        voiceButton.classList.toggle('is-recording', on);
+        voiceButton.setAttribute('aria-pressed', String(on));
+        voiceStatus.textContent = on ? 'Stop' : 'Voice';
+    }
+
     async function initWhisper() {
         if (!whisper) {
-            voiceMessageText.textContent = '⏳ Loading AI model (first time only)...';
-            voiceMessage.classList.remove('hidden');
-            try {
-                whisper = new BrowserWhisper({ model: 'whisper-base' });
-                voiceMessageText.textContent = '✓ Model loaded! Ready to record.';
-                setTimeout(() => {
-                    voiceMessage.classList.add('hidden');
-                }, 2000);
-            } catch (error) {
-                console.error('Failed to load Whisper:', error);
-                voiceMessageText.textContent = '❌ Failed to load AI model';
-                voiceMessage.classList.remove('hidden');
-                setTimeout(() => {
-                    voiceMessage.classList.add('hidden');
-                }, 3000);
-                throw error;
-            }
+            toast('Loading the speech model. This takes a while the first time.');
+            const { BrowserWhisper } = await import('https://esm.sh/browser-whisper@1.0.1');
+            whisper = new BrowserWhisper({ model: 'whisper-base' });
         }
         return whisper;
     }
-    
-    voiceButton.addEventListener('click', async () => {
-        if (!isRecording) {
-            await startRecording();
-        } else {
-            await stopRecording();
-        }
-    });
-    
+
     async function startRecording() {
+        let stream;
         try {
-            // Request microphone access
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            // Initialize Whisper model
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        } catch {
+            toast('Microphone access is blocked. Allow it in your browser settings.', { error: true });
+            return;
+        }
+        try {
             await initWhisper();
-            
-            // Start recording
-            audioChunks = [];
-            mediaRecorder = new MediaRecorder(stream);
-            
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-            
-            mediaRecorder.onstop = async () => {
-                // Stop all tracks to turn off microphone
-                stream.getTracks().forEach(track => track.stop());
-                
-                // Create audio blob
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                
-                // Transcribe
-                await transcribeAudio(audioBlob);
-            };
-            
-            mediaRecorder.start();
-            isRecording = true;
-            
-            // Update UI
-            voiceStatus.textContent = 'Stop';
-            voiceButton.style.backgroundColor = '#dc2626'; // Red when recording
-            voiceMessageText.textContent = '🎤 Recording... Click stop when done';
-            voiceMessage.classList.remove('hidden');
-            
         } catch (error) {
-            console.error('Error starting recording:', error);
-            alert('Failed to access microphone. Please check your permissions.');
+            console.error('Failed to load Whisper:', error);
+            stream.getTracks().forEach((track) => track.stop());
+            toast('Could not load the speech model.', { error: true });
+            return;
         }
+
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(stream);
+        mediaRecorder.ondataavailable = (event) => audioChunks.push(event.data);
+        mediaRecorder.onstop = async () => {
+            stream.getTracks().forEach((track) => track.stop());
+            await transcribe(new Blob(audioChunks, { type: 'audio/webm' }));
+        };
+        mediaRecorder.start();
+        setRecording(true);
+        toast('Listening. Tap Stop when you finish.');
     }
-    
-    async function stopRecording() {
-        if (mediaRecorder && isRecording) {
-            mediaRecorder.stop();
-            isRecording = false;
-            
-            // Update UI
-            voiceStatus.textContent = 'Voice';
-            voiceButton.style.backgroundColor = 'var(--teal)';
-            voiceMessageText.textContent = '⏳ Transcribing...';
-        }
-    }
-    
-    async function transcribeAudio(audioBlob) {
+
+    async function transcribe(audioBlob) {
+        toast('Transcribing…');
         try {
-            voiceMessageText.textContent = '⏳ Transcribing...';
-            
-            // Convert blob to file
-            const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-            
-            // Transcribe with Whisper
+            const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
             let transcription = '';
-            for await (const { text } of whisper.transcribe(audioFile)) {
-                transcription += text + ' ';
-            }
-            
-            // Insert transcription into textarea
-            const currentValue = input.value.trim();
-            if (currentValue) {
-                input.value = currentValue + '\n\n' + transcription.trim();
-            } else {
-                input.value = transcription.trim();
-            }
-            
-            // Trigger input event to parse attribution
-            input.dispatchEvent(new Event('input'));
-            
-            // Show success
-            voiceMessageText.textContent = '✓ Transcription complete! Edit as needed.';
-            setTimeout(() => {
-                voiceMessage.classList.add('hidden');
-            }, 3000);
-            
-            // Focus textarea for editing
+            for await (const { text } of whisper.transcribe(file)) transcription += text + ' ';
+            const current = input.value.trim();
+            input.value = current ? `${current}\n\n${transcription.trim()}` : transcription.trim();
             input.focus();
-            
+            toast('Transcribed. Edit as needed, then save.');
         } catch (error) {
             console.error('Transcription error:', error);
-            voiceMessageText.textContent = '❌ Transcription failed. Please try again.';
-            setTimeout(() => {
-                voiceMessage.classList.add('hidden');
-            }, 3000);
+            toast('Transcription failed. Try again.', { error: true });
         }
     }
+
+    voiceButton.addEventListener('click', async () => {
+        if (!recording) {
+            await startRecording();
+        } else if (mediaRecorder) {
+            mediaRecorder.stop();
+            setRecording(false);
+        }
+    });
 </script>
 {% endblock %}

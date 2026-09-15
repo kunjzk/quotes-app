@@ -1,0 +1,23 @@
+{% load passages %}<div data-matching-books="{{ matching_book_ids|join:',' }}">
+    <div class="panel-head">
+        <h2>“{{ query }}”</h2>
+        <div class="meta">{{ results|length }} matching passage{{ results|length|pluralize }}</div>
+    </div>
+
+    {% if results %}
+    <ol class="passages">
+        {% for quote in results %}
+        <li id="q{{ quote.id }}">
+            <span class="pg">{{ quote.page_number|default_if_none:"" }}</span>
+            <div>
+                <p>{{ quote.quote|highlight:query }}</p>
+                <div class="from">{{ quote.book.title|highlight:query }}{% if quote.book.author %} · {{ quote.book.author|highlight:query }}{% endif %}</div>
+                {% include 'quotes/partials/passage_actions.html' %}
+            </div>
+        </li>
+        {% endfor %}
+    </ol>
+    {% else %}
+    <p class="panel-empty">No passages contain that. Try a single word, a title or an author.</p>
+    {% endif %}
+</div>

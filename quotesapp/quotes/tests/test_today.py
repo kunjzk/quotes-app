@@ -259,9 +259,10 @@ class TodayViewTest(TodayTestMixin, TestCase):
         resp = self.client.get(reverse("quotes:today"))
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(len(resp.context["quotes"]), 3)
-        self.assertContains(resp, "search criteria")
         self.assertContains(resp, 'id="criteria-count"')
-        self.assertContains(resp, "9 passages")
+        self.assertContains(resp, 'id="pages"')
+        self.assertContains(resp, 'class="quote-page reading', count=3)
+        self.assertContains(resp, "1 of 3")
         self.assertTrue(TodayPreference.objects.filter(user=self.user).exists())
 
     def test_shows_filtered_quotes(self):
@@ -271,7 +272,23 @@ class TodayViewTest(TodayTestMixin, TestCase):
         self.assertEqual(len(resp.context["quotes"]), 3)
         self.assertEqual(resp.context["matching_quotes"], 3)
         self.assertTrue(resp.context["is_filtered"])
-        self.assertContains(resp, "showing 3 of 9 passages")
+        self.assertEqual(resp.context["total_quotes"], 9)
+        self.assertContains(resp, 'id="clear-filter" class="clear-filter">')
+
+    def test_unfiltered_page_hides_clear_button(self):
+        assert self.client.login(username="reader", password="pw")
+        resp = self.client.get(reverse("quotes:today"))
+        self.assertContains(resp, 'id="clear-filter" class="clear-filter" hidden>')
+
+    def test_partial_returns_only_the_passages(self):
+        update_today_preference(self.user, 2, "Frank Herbert", "")
+        assert self.client.login(username="reader", password="pw")
+        resp = self.client.get(reverse("quotes:today"), {"partial": "pages"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTemplateUsed(resp, "quotes/partials/today_pages.html")
+        self.assertTemplateNotUsed(resp, "base.html")
+        self.assertContains(resp, 'class="quote-page reading', count=2)
+        self.assertNotContains(resp, 'id="criteria-form"')
 
     def test_no_match_state_keeps_criteria_editable(self):
         update_today_preference(self.user, 3, "Nobody Known", "")

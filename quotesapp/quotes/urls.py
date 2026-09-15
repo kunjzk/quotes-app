@@ -18,6 +18,7 @@ urlpatterns = [
     path("api/book/suggest/", views.BookSuggestView.as_view(), name="book_suggest"),
     path("api/author/suggest/", views.AuthorSuggestView.as_view(), name="author_suggest"),
     path("api/today/suggest/", views.TodaySuggestView.as_view(), name="today_suggest"),
+    path("api/search/", views.SearchView.as_view(), name="search"),
     
     # Legacy views (keep for admin/compatibility)
     path("list/", views.QuotesListView.as_view(), name="quotes_list"),

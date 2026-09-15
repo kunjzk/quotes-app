@@ -1,6 +1,6 @@
 from quotes.models import Quote, Book, User, TodayPreference, TodaySelection
 from django.db import transaction, DataError, IntegrityError, DatabaseError
-from django.db.models import QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
@@ -271,3 +271,27 @@ def suggest_today_values(user: User, field: str, query: str = "", author: str = 
         return list(values.order_by("title").distinct()[:limit])
 
     raise ValueError(f"Unknown suggestion field: {field}")
+
+def search_passages(user: User, query: str) -> QuerySet[Quote]:
+    """The user's passages whose text, book title or author contains `query`."""
+    query = (query or "").strip()
+    return (
+        Quote.objects.filter(user=user)
+        .filter(
+            Q(quote__icontains=query)
+            | Q(book__title__icontains=query)
+            | Q(book__author__icontains=query)
+        )
+        .select_related("book")
+        .order_by("book__title", "page_number", "id")
+    )
+
+
+def books_on_shelf(user: User) -> QuerySet[Book]:
+    """Books the user has live (not deleted) passages in, annotated with `quote_count`."""
+    live = Q(quote__user=user, quote__deleted_at__isnull=True)
+    return (
+        Book.objects.filter(live)
+        .annotate(quote_count=Count("quote", filter=live))
+        .order_by("-quote_count", "title")
+    )

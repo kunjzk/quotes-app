@@ -1,20 +1,15 @@
 {% extends 'base.html' %}
 
-{% block title %}Import · ReadReadRead{% endblock %}
+{% block title %}Import · Capture · ReadReadRead{% endblock %}
 
 {% block content %}
-<div class="min-h-screen p-8">
-    <div class="max-w-3xl mx-auto">
-        <!-- Header -->
-        <div class="mb-12">
-            <h1 class="text-3xl font-semibold mb-4">Import from Readwise</h1>
-            <p class="italic" style="color: var(--grey);">
-                Upload your Readwise CSV export to bulk import your highlights.
-            </p>
-        </div>
-        
+<div class="capture capture-panel">
+    <div>
+        {% include 'quotes/partials/capture_modes.html' %}
+        <p class="lede">Upload a Readwise CSV export. Books and authors are matched to your shelf and duplicates are skipped.</p>
+
         <!-- Upload Form -->
-        <div class="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-8 mb-8" style="background-color: var(--paper); border: 1px solid var(--ink); opacity: 0.95;">
+        <div class="mb-8">
             <form id="import-form" enctype="multipart/form-data" class="space-y-6">
                 {% csrf_token %}
                 
@@ -25,7 +20,7 @@
                     </label>
                     
                     <div class="border-2 border-dashed rounded-lg p-8 text-center transition-colors hover:border-teal"
-                         style="border-color: var(--ink); opacity: 0.5;"
+                         style="border-color: var(--faint);"
                          id="drop-zone">
                         <input 
                             type="file" 
@@ -74,7 +69,7 @@
                         <span class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">Importing...</span>
                         <span id="progress-text" class="font-mono text-xs" style="color: var(--grey);"></span>
                     </div>
-                    <div class="w-full h-2 rounded" style="background-color: var(--ink); opacity: 0.2;">
+                    <div class="w-full h-2 rounded" style="background-color: var(--rule);">
                         <div id="progress-bar" class="h-full rounded bg-teal transition-all duration-300" style="width: 0%"></div>
                     </div>
                 </div>
@@ -84,9 +79,7 @@
                 
                 <!-- Submit Button -->
                 <div class="flex justify-between items-center pt-4">
-                    <a href="{% url 'quotes:today' %}" class="font-mono text-sm uppercase tracking-wide hover:text-teal transition-colors" style="color: var(--grey);">
-                        ← back
-                    </a>
+                    <span></span>
                     
                     <button
                         type="submit"
@@ -140,12 +133,12 @@
     });
     
     dropZone.addEventListener('dragleave', () => {
-        dropZone.style.borderColor = 'var(--ink)';
+        dropZone.style.borderColor = 'var(--faint)';
     });
     
     dropZone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropZone.style.borderColor = 'var(--ink)';
+        dropZone.style.borderColor = 'var(--faint)';
         
         if (e.dataTransfer.files.length) {
             fileInput.files = e.dataTransfer.files;

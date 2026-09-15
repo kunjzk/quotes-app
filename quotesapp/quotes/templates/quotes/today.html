@@ -2,422 +2,140 @@
 
 {% block title %}Today · ReadReadRead{% endblock %}
 
-{% block extra_head %}
-<style>
-    /* Fill-in-the-blank search criteria */
-    #criteria {
-        color: var(--grey);
-        cursor: text;
-        transition: color 0.2s ease;
-    }
-    #criteria.is-active {
-        color: var(--ink);
-    }
-    #criteria.is-saving {
-        opacity: 0.5;
-        pointer-events: none;
-    }
-    #criteria .blank {
-        position: relative;
-        display: inline-block;
-        vertical-align: baseline;
-    }
-    #criteria .blank input {
-        background: transparent;
-        border: 0;
-        border-bottom: 1px dashed currentColor;
-        border-radius: 0;
-        color: inherit;
-        font: inherit;
-        line-height: inherit;
-        padding: 0 0.2em;
-        margin: 0;
-        outline: none;
-        text-align: center;
-        min-width: 2.5ch;
-        -moz-appearance: textfield;
-        appearance: textfield;
-    }
-    #criteria .blank input::-webkit-outer-spin-button,
-    #criteria .blank input::-webkit-inner-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
-    #criteria .blank input::placeholder {
-        color: inherit;
-        opacity: 1;
-        font-style: italic;
-    }
-    #criteria.is-active .blank input {
-        border-bottom-style: solid;
-        border-bottom-color: var(--teal);
-    }
-    #criteria .blank input:focus {
-        color: var(--teal);
-    }
-    #criteria .measure {
-        position: absolute;
-        visibility: hidden;
-        white-space: pre;
-        pointer-events: none;
-        top: 0;
-        left: 0;
-    }
-    #criteria .suggestions {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        z-index: 30;
-        min-width: 100%;
-        max-width: min(75vw, 28rem);
-        margin: 0.25rem 0 0;
-        padding: 0.25rem 0;
-        list-style: none;
-        background-color: var(--paper);
-        border: 1px solid var(--ink);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        text-align: left;
-        font-size: 0.875rem;
-        font-style: normal;
-        color: var(--ink);
-    }
-    #criteria .suggestions[hidden] {
-        display: none;
-    }
-    #criteria .suggestions li {
-        padding: 0.3rem 0.75rem;
-        cursor: pointer;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    #criteria .suggestions li.is-any {
-        font-style: italic;
-        color: var(--grey);
-    }
-    #criteria .suggestions li:hover,
-    #criteria .suggestions li.is-highlighted {
-        background-color: var(--teal);
-        color: var(--paper);
-    }
-    .criteria-btn {
-        font-family: var(--font-mono, monospace);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        padding: 0.35em 0.9em;
-        border: 1px solid currentColor;
-        cursor: pointer;
-        background: transparent;
-        transition: background 0.15s, color 0.15s;
-    }
-    .criteria-btn:hover {
-        background: var(--ink);
-        color: var(--paper);
-    }
-    .criteria-btn.reset-btn {
-        color: var(--grey);
-        border-color: var(--grey);
-    }
-    .criteria-btn.reset-btn:hover {
-        background: var(--grey);
-        color: var(--paper);
-    }
-    .nav-btn {
-        font-family: var(--font-mono, monospace);
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        background: transparent;
-        border: none;
-        cursor: pointer;
-        transition: opacity 0.15s;
-        padding: 0;
-    }
-    .nav-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
-</style>
+{% block content %}
+<div class="today">
+    {% if total_quotes %}
+    <div id="criteria" class="criteria">
+        <form id="criteria-form"
+              autocomplete="off"
+              data-save-url="{% url 'quotes:today_preferences' %}"
+              data-suggest-url="{% url 'quotes:today_suggest' %}"
+              data-pages-url="{% url 'quotes:today' %}?partial=pages">
+            {% csrf_token %}
+            I want to see
+            <span class="blank">
+                <input id="criteria-count"
+                       name="quote_count"
+                       type="number"
+                       inputmode="numeric"
+                       min="{{ min_quote_count }}"
+                       max="{{ max_quote_count }}"
+                       value="{{ preference.quote_count }}"
+                       aria-label="Number of quotes">
+            </span>
+            <span id="criteria-count-label">quote{{ preference.quote_count|pluralize }}</span> by
+            <span class="blank">
+                <input id="criteria-author"
+                       name="author"
+                       type="text"
+                       placeholder="any"
+                       value="{{ preference.author }}"
+                       maxlength="255"
+                       spellcheck="false"
+                       aria-label="Author"
+                       aria-autocomplete="list">
+                <ul class="suggestions" role="listbox" hidden></ul>
+            </span>
+            author in
+            <span class="blank">
+                <input id="criteria-book"
+                       name="book"
+                       type="text"
+                       placeholder="any"
+                       value="{{ preference.book_title }}"
+                       maxlength="255"
+                       spellcheck="false"
+                       aria-label="Book"
+                       aria-autocomplete="list">
+                <ul class="suggestions" role="listbox" hidden></ul>
+            </span>
+            book.
+            <button type="button" id="clear-filter" class="clear-filter"{% if not is_filtered %} hidden{% endif %}>clear ×</button>
+        </form>
+        <p id="criteria-error" class="criteria-error" role="alert" hidden></p>
+    </div>
+
+    <div id="pages">
+        {% include 'quotes/partials/today_pages.html' %}
+    </div>
+    {% else %}
+    <div></div>
+    <div class="empty-state">
+        <p>No passages yet.</p>
+        <p class="hint"><a href="{% url 'quotes:capture' %}">Capture your first quote</a> and it will be waiting here tomorrow morning.</p>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}
 
-{% block content %}
-<div class="h-full flex items-center justify-center p-8">
-    <div class="max-w-3xl w-full">
-        {% if total_quotes %}
-            <!-- Welcome message -->
-            <p class="font-mono text-xs uppercase tracking-wide mb-6" style="color: var(--grey);">
-                Welcome back. Here are your passages for today.
-            </p>
-
-            <!-- Search Criteria -->
-            <div class="mb-6">
-                <div id="criteria" class="flex-1 min-w-0">
-                    <p class="font-mono text-xs uppercase tracking-wide mb-2 select-none">search criteria</p>
-                    <form id="criteria-form"
-                          class="text-lg leading-loose"
-                          autocomplete="off"
-                          data-save-url="{% url 'quotes:today_preferences' %}"
-                          data-suggest-url="{% url 'quotes:today_suggest' %}">
-                        {% csrf_token %}
-                        I want to see
-                        <span class="blank">
-                            <input id="criteria-count"
-                                   name="quote_count"
-                                   type="number"
-                                   inputmode="numeric"
-                                   min="{{ min_quote_count }}"
-                                   max="{{ max_quote_count }}"
-                                   value="{{ preference.quote_count }}"
-                                   aria-label="Number of quotes">
-                        </span>
-                        <span id="criteria-count-label">quote{{ preference.quote_count|pluralize }}</span> by
-                        <span class="blank">
-                            <input id="criteria-author"
-                                   name="author"
-                                   type="text"
-                                   placeholder="any"
-                                   value="{{ preference.author }}"
-                                   maxlength="255"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                                   aria-label="Author"
-                                   aria-autocomplete="list">
-                            <ul class="suggestions" role="listbox" hidden></ul>
-                        </span>
-                        author in
-                        <span class="blank">
-                            <input id="criteria-book"
-                                   name="book"
-                                   type="text"
-                                   placeholder="any"
-                                   value="{{ preference.book_title }}"
-                                   maxlength="255"
-                                   autocomplete="off"
-                                   spellcheck="false"
-                                   aria-label="Book"
-                                   aria-autocomplete="list">
-                            <ul class="suggestions" role="listbox" hidden></ul>
-                        </span>
-                        book.
-                    </form>
-                    <p id="criteria-error" class="font-mono text-xs mt-1 text-red-700" hidden></p>
-                </div>
-                <!-- Search and Reset buttons -->
-                <div class="flex items-center gap-3 mt-4">
-                    <button id="search-btn" class="criteria-btn" style="color: var(--ink);">Search</button>
-                    <button id="reset-btn" class="criteria-btn reset-btn">Reset</button>
-                </div>
-            </div>
-
-            {% if quotes %}
-            <!-- Quote Pages -->
-            <div id="quote-container" class="relative min-h-[400px]">
-                {% for quote in quotes %}
-                <div class="quote-page {% if forloop.first %}active{% else %}hidden{% endif %}"
-                     data-page="{{ forloop.counter0 }}"
-                     data-total="{{ quotes|length }}">
-
-                    <!-- Quote Text -->
-                    <div class="flex items-start space-x-8">
-                        {% if quote.page_number %}
-                        <div class="w-12 flex-shrink-0 pt-1">
-                            <span class="font-mono text-sm" style="color: var(--grey);">
-                                {{ quote.page_number }}
-                            </span>
-                        </div>
-                        {% endif %}
-                        <div class="flex-1">
-                            <blockquote class="text-2xl leading-relaxed">
-                                {{ quote.quote }}
-                            </blockquote>
-                        </div>
-                    </div>
-
-                    <!-- Book attribution below quote -->
-                    <div class="mt-8 pt-4 border-t" style="border-color: var(--ink); border-opacity: 0.4;">
-                        <p class="font-mono text-sm uppercase tracking-wide" style="color: var(--ink);">
-                            {{ quote.book.title }}
-                        </p>
-                        {% if quote.book.author %}
-                        <p class="font-mono text-xs italic mt-1" style="color: var(--ink); opacity: 0.75;">
-                            {{ quote.book.author }}
-                        </p>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            <!-- Global Navigation -->
-            <div class="mt-16 flex justify-between items-center">
-                <button
-                    id="prev-button"
-                    class="nav-btn"
-                    {% if quotes|length <= 1 %}disabled{% endif %}>
-                    ← prev
-                </button>
-
-                <div class="flex space-x-2">
-                    {% for quote in quotes %}
-                    <div class="page-indicator w-2 h-2 rounded-full transition-all"
-                         data-page="{{ forloop.counter0 }}"
-                         style="background-color: {% if forloop.first %}var(--teal){% else %}var(--grey); opacity: 0.3{% endif %};">
-                    </div>
-                    {% endfor %}
-                </div>
-
-                <button
-                    id="next-button"
-                    class="nav-btn"
-                    {% if quotes|length <= 1 %}disabled{% endif %}>
-                    turn →
-                </button>
-            </div>
-
-            <!-- Total Count -->
-            <div class="mt-12 text-center">
-                <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
-                    showing {{ quotes|length }} of {{ total_quotes }} passage{{ total_quotes|pluralize }}
-                </p>
-            </div>
-
-            {% else %}
-            <!-- No quotes match the criteria -->
-            <div id="no-match" class="text-center py-16">
-                <p class="text-xl mb-4" style="color: var(--grey);">
-                    No passages match these criteria.
-                </p>
-                <p class="font-mono text-xs uppercase tracking-wide" style="color: var(--grey);">
-                    Adjust the author or book above, or set them back to any.
-                </p>
-            </div>
-            {% endif %}
-
-        {% else %}
-            <!-- Empty State -->
-            <div class="text-center py-16">
-                <p class="text-xl mb-8" style="color: var(--grey);">
-                    No quotes yet. Start capturing your passages.
-                </p>
-                <a href="{% url 'quotes:capture' %}"
-                   class="inline-block px-6 py-3 bg-teal text-white font-mono text-sm uppercase tracking-wide hover:opacity-90 transition-opacity">
-                    Capture your first quote
-                </a>
-            </div>
-        {% endif %}
-    </div>
-</div>
-
+{% block extra_scripts %}
+{% if total_quotes %}
 <script>
+    // ---- Pager: reads its state from the DOM so it keeps working after #pages is swapped.
     let currentPage = 0;
-    const totalPages = {{ quotes|length }};
+    const pageEls = () => document.querySelectorAll('#pages .quote-page');
 
-    function updateNavButtons() {
-        const prevBtn = document.getElementById('prev-button');
-        const nextBtn = document.getElementById('next-button');
-        if (prevBtn) prevBtn.disabled = (currentPage === 0);
-        if (nextBtn) nextBtn.disabled = (currentPage >= totalPages - 1);
+    function showPage(index) {
+        const pages = pageEls();
+        if (index < 0 || index >= pages.length || index === currentPage) return;
+        pages.forEach((page, i) => { page.hidden = i !== index; });
+        const page = pages[index];
+        page.classList.remove('turn-in');
+        void page.offsetWidth;
+        page.classList.add('turn-in');
+        document.querySelectorAll('#pages .seg').forEach((seg, i) => seg.classList.toggle('on', i === index));
+        const pos = document.getElementById('pos');
+        if (pos) pos.textContent = `${index + 1} of ${pages.length}`;
+        const prev = document.getElementById('prev-button');
+        const next = document.getElementById('next-button');
+        if (prev) prev.disabled = index === 0;
+        if (next) next.disabled = index === pages.length - 1;
+        currentPage = index;
     }
 
-    function showPage(pageIndex) {
-        document.querySelectorAll('.quote-page').forEach(page => {
-            page.classList.add('hidden');
-            page.classList.remove('active', 'page-fade-enter');
-        });
-
-        const targetPage = document.querySelector(`[data-page="${pageIndex}"]`);
-        if (targetPage) {
-            targetPage.classList.remove('hidden');
-            targetPage.classList.add('active', 'page-fade-enter');
-
-            document.querySelectorAll('.page-indicator').forEach((indicator, idx) => {
-                if (idx === pageIndex) {
-                    indicator.style.backgroundColor = 'var(--teal)';
-                    indicator.style.opacity = '1';
-                } else {
-                    indicator.style.backgroundColor = 'var(--grey)';
-                    indicator.style.opacity = '0.3';
-                }
-            });
-
-            currentPage = pageIndex;
-            updateNavButtons();
-        }
-    }
-
-    function nextPage() {
-        if (currentPage < totalPages - 1) {
-            showPage(currentPage + 1);
-        }
-    }
-
-    function previousPage() {
-        if (currentPage > 0) {
-            showPage(currentPage - 1);
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        updateNavButtons();
-
-        const nextBtn = document.getElementById('next-button');
-        const prevBtn = document.getElementById('prev-button');
-
-        if (nextBtn) {
-            nextBtn.addEventListener('click', nextPage);
-        }
-        if (prevBtn) {
-            prevBtn.addEventListener('click', previousPage);
-        }
-    });
-
-    // Keyboard navigation
-    document.addEventListener('keydown', (e) => {
-        if (e.target.closest && e.target.closest('input, textarea')) return;
-        if (e.key === 'ArrowRight') nextPage();
-        else if (e.key === 'ArrowLeft') previousPage();
-    });
-
-    // Swipe support
-    let touchStartX = 0;
-    let touchEndX = 0;
-    const container = document.getElementById('quote-container');
-    if (container) {
-        container.addEventListener('touchstart', (e) => {
-            touchStartX = e.changedTouches[0].screenX;
-        });
-        container.addEventListener('touchend', (e) => {
-            touchEndX = e.changedTouches[0].screenX;
-            const diff = touchStartX - touchEndX;
-            if (Math.abs(diff) > 50) {
-                if (diff > 0) nextPage();
-                else previousPage();
+    document.addEventListener('click', async (e) => {
+        if (e.target.closest('#prev-button')) showPage(currentPage - 1);
+        if (e.target.closest('#next-button')) showPage(currentPage + 1);
+        const copy = e.target.closest('[data-copy]');
+        if (copy) {
+            const text = copy.closest('.quote-page').querySelector('.q').textContent.trim();
+            try {
+                await navigator.clipboard.writeText(text);
+                toast('Copied passage');
+            } catch {
+                toast('Copy is blocked in this browser', { error: true });
             }
-        });
-    }
+        }
+    });
 
-    // Search criteria: "I want to see __ quotes by ____ author in ____ book."
+    document.addEventListener('keydown', (e) => {
+        if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === 'ArrowRight') showPage(currentPage + 1);
+        else if (e.key === 'ArrowLeft') showPage(currentPage - 1);
+    });
+
+    let touchStartX = 0;
+    const pagesRoot = document.getElementById('pages');
+    pagesRoot.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; }, { passive: true });
+    pagesRoot.addEventListener('touchend', (e) => {
+        const diff = touchStartX - e.changedTouches[0].screenX;
+        if (Math.abs(diff) > 50) showPage(currentPage + (diff > 0 ? 1 : -1));
+    });
+
+    // ---- Criteria sentence: "I want to see __ quotes by __ author in __ book."
     (function () {
         const root = document.getElementById('criteria');
-        if (!root) return;
-
         const form = document.getElementById('criteria-form');
         const countInput = document.getElementById('criteria-count');
         const authorInput = document.getElementById('criteria-author');
         const bookInput = document.getElementById('criteria-book');
         const countLabel = document.getElementById('criteria-count-label');
+        const clearButton = document.getElementById('clear-filter');
         const errorEl = document.getElementById('criteria-error');
-        const searchBtn = document.getElementById('search-btn');
-        const resetBtn = document.getElementById('reset-btn');
-        const saveUrl = form.dataset.saveUrl;
-        const suggestUrl = form.dataset.suggestUrl;
         const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
         const ANY = 'any';
         const MIN_COUNT = {{ min_quote_count }};
         const MAX_COUNT = {{ max_quote_count }};
-
-        let saving = false;
 
         // Size each blank to its content so the sentence reads naturally.
         const measure = document.createElement('span');
@@ -426,15 +144,31 @@
         function fit(input) {
             measure.style.font = getComputedStyle(input).font;
             measure.textContent = input.value || input.placeholder || '0';
-            input.style.width = (measure.offsetWidth + 12) + 'px';
+            input.style.width = (measure.offsetWidth + 10) + 'px';
         }
+        const fitAll = () => [countInput, authorInput, bookInput].forEach(fit);
 
-        function currentValues() {
+        function values() {
             return {
                 quote_count: countInput.value.trim(),
                 author: authorInput.value.trim(),
                 book: bookInput.value.trim(),
             };
+        }
+        let applied = JSON.stringify(values());
+
+        function syncDecorations() {
+            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
+            authorInput.classList.toggle('is-set', !!authorInput.value.trim());
+            bookInput.classList.toggle('is-set', !!bookInput.value.trim());
+            clearButton.hidden = !(authorInput.value.trim() || bookInput.value.trim());
+        }
+
+        function clampCount() {
+            const n = parseInt(countInput.value.trim(), 10);
+            if (isNaN(n) || n < MIN_COUNT) countInput.value = MIN_COUNT;
+            else if (n > MAX_COUNT) countInput.value = MAX_COUNT;
+            fit(countInput);
         }
 
         function showError(message) {
@@ -442,107 +176,64 @@
             errorEl.hidden = !message;
         }
 
-        function activate() {
-            root.classList.add('is-active');
-        }
+        // Save the criteria, then swap in the matching passages. No page reload.
+        // Calls are chained so a blur and a click in quick succession don't race.
+        let pending = Promise.resolve();
+        const apply = () => (pending = pending.then(applyNow));
 
-        function deactivate() {
-            root.classList.remove('is-active');
-        }
+        async function applyNow() {
+            clampCount();
+            syncDecorations();
+            const current = JSON.stringify(values());
+            if (current === applied) return;
 
-        function validateCount() {
-            const val = parseInt(countInput.value.trim(), 10);
-            if (isNaN(val) || val < MIN_COUNT) {
-                countInput.value = MIN_COUNT;
-                fit(countInput);
-            } else if (val > MAX_COUNT) {
-                countInput.value = MAX_COUNT;
-                fit(countInput);
-            }
-            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
-        }
-
-        // Save criteria to backend silently (no page reload).
-        async function commit() {
-            if (saving) return;
-            validateCount();
-            saving = true;
             root.classList.add('is-saving');
             showError('');
             try {
-                const response = await fetch(saveUrl, {
+                const saved = await fetch(form.dataset.saveUrl, {
                     method: 'POST',
                     headers: { 'X-CSRFToken': csrfToken },
-                    body: new URLSearchParams(currentValues()),
+                    body: new URLSearchParams(values()),
                 });
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || 'Could not save your criteria');
+                const data = await saved.json();
+                if (!saved.ok) throw new Error(data.error || 'Could not save these criteria.');
+
+                const response = await fetch(form.dataset.pagesUrl);
+                if (!response.ok) throw new Error('Could not load passages. Try again.');
+                const html = await response.text();
+                const swap = () => {
+                    pagesRoot.innerHTML = html;
+                    currentPage = 0;
+                };
+                if (document.startViewTransition && document.visibilityState === 'visible') {
+                    document.startViewTransition(swap).ready.catch(() => {});
+                } else {
+                    swap();
                 }
+                applied = current;
             } catch (err) {
                 showError(err.message);
             } finally {
-                saving = false;
                 root.classList.remove('is-saving');
             }
         }
 
-        // Search: save then reload to show new results.
-        async function search() {
-            await commit();
-            if (!errorEl.hidden) return;
-            window.location.reload();
-        }
-
-        // Reset: clear author/book, restore default count, save, then reload.
-        async function reset() {
-            countInput.value = '{{ default_quote_count }}';
+        clearButton.addEventListener('click', () => {
             authorInput.value = '';
             bookInput.value = '';
-            [countInput, authorInput, bookInput].forEach(fit);
-            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
-            await commit();
-            window.location.reload();
-        }
-
-        form.addEventListener('submit', (e) => e.preventDefault());
-
-        if (searchBtn) searchBtn.addEventListener('click', search);
-        if (resetBtn) resetBtn.addEventListener('click', reset);
-
-        // Clicking anywhere on the sentence wakes it up.
-        root.addEventListener('mousedown', (e) => {
-            activate();
-            if (e.target.tagName !== 'INPUT' && !e.target.closest('.suggestions')) {
-                e.preventDefault();
-                countInput.focus();
-                countInput.select();
-            }
+            fitAll();
+            apply();
         });
 
-        root.addEventListener('focusout', (e) => {
-            if (!root.contains(e.relatedTarget)) {
-                deactivate();
-            }
-        });
+        form.addEventListener('submit', (e) => { e.preventDefault(); apply(); });
 
-        countInput.addEventListener('focus', activate);
-        countInput.addEventListener('input', () => {
-            fit(countInput);
-            countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
-        });
+        countInput.addEventListener('input', () => { fit(countInput); syncDecorations(); });
+        countInput.addEventListener('change', apply);
         countInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                countInput.blur();
-                search();
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                countInput.blur();
-            }
+            if (e.key === 'Enter') { e.preventDefault(); countInput.blur(); apply(); }
+            if (e.key === 'Escape') { e.preventDefault(); countInput.blur(); }
         });
 
-        // Author / book blanks with autocomplete
         function setupAutocomplete(input, field, otherInput, otherParam) {
             const list = input.parentElement.querySelector('.suggestions');
             let items = [];
@@ -560,9 +251,7 @@
             function highlight(index) {
                 if (!items.length) return;
                 highlighted = (index + items.length) % items.length;
-                Array.from(list.children).forEach((li, i) => {
-                    li.classList.toggle('is-highlighted', i === highlighted);
-                });
+                Array.from(list.children).forEach((li, i) => li.classList.toggle('is-highlighted', i === highlighted));
                 list.children[highlighted].scrollIntoView({ block: 'nearest' });
             }
 
@@ -570,15 +259,15 @@
                 input.value = value === ANY ? '' : value;
                 fit(input);
                 close();
-                // Save silently; user must click Search to reload.
-                commit();
+                input.blur();
+                apply(); // chained and deduplicated, so the blur handler's apply is a no-op
             }
 
-            function render(values) {
+            function render(suggestions) {
                 const query = input.value.trim().toLowerCase();
                 items = [];
                 if (!query || ANY.startsWith(query)) items.push(ANY);
-                values.forEach(v => { if (!items.includes(v)) items.push(v); });
+                suggestions.forEach((v) => { if (!items.includes(v)) items.push(v); });
 
                 list.innerHTML = '';
                 highlighted = -1;
@@ -588,10 +277,7 @@
                     li.textContent = value;
                     li.setAttribute('role', 'option');
                     if (value === ANY) li.classList.add('is-any');
-                    li.addEventListener('mousedown', (e) => {
-                        e.preventDefault();
-                        choose(value);
-                    });
+                    li.addEventListener('mousedown', (e) => { e.preventDefault(); choose(value); });
                     list.appendChild(li);
                 });
                 list.hidden = false;
@@ -599,26 +285,24 @@
 
             async function load() {
                 const id = ++requestId;
-                const params = new URLSearchParams({ field: field, q: input.value.trim() });
+                const params = new URLSearchParams({ field, q: input.value.trim() });
                 params.set(otherParam, otherInput.value.trim());
                 try {
-                    const response = await fetch(suggestUrl + '?' + params.toString(), {
-                        headers: { 'Accept': 'application/json' },
-                    });
+                    const response = await fetch(`${form.dataset.suggestUrl}?${params}`, { headers: { Accept: 'application/json' } });
                     if (!response.ok) return;
                     const data = await response.json();
                     if (id !== requestId || document.activeElement !== input) return;
                     render(data.suggestions || []);
-                } catch (err) { /* suggestions are a convenience */ }
+                } catch { /* suggestions are a convenience */ }
             }
 
-            input.addEventListener('focus', () => { activate(); load(); });
+            input.addEventListener('focus', load);
             input.addEventListener('input', () => {
                 fit(input);
                 clearTimeout(debounce);
                 debounce = setTimeout(load, 150);
             });
-            input.addEventListener('blur', close);
+            input.addEventListener('blur', () => { close(); apply(); });
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowDown') {
                     e.preventDefault();
@@ -631,8 +315,9 @@
                     if (highlighted >= 0) {
                         choose(items[highlighted]);
                     } else {
+                        close();
                         input.blur();
-                        search();
+                        apply();
                     }
                 } else if (e.key === 'Escape') {
                     e.preventDefault();
@@ -645,10 +330,10 @@
         setupAutocomplete(authorInput, 'author', bookInput, 'book');
         setupAutocomplete(bookInput, 'book', authorInput, 'author');
 
-        [countInput, authorInput, bookInput].forEach(fit);
-        if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(() => [countInput, authorInput, bookInput].forEach(fit));
-        }
+        syncDecorations();
+        fitAll();
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitAll);
     })();
 </script>
+{% endif %}
 {% endblock %}

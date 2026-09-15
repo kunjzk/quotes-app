@@ -1,0 +1,12 @@
+{% with n=request.resolver_match.url_name %}
+<nav class="modes" aria-label="Capture mode">
+    <a href="{% url 'quotes:capture' %}" {% if n == 'capture' %}aria-current="page"{% endif %}>Type</a>
+    {% if n == 'capture' %}
+    <button type="button" id="voice-button" aria-pressed="false"><span class="rec-dot" aria-hidden="true"></span><span id="voice-status">Voice</span></button>
+    {% else %}
+    <a href="{% url 'quotes:capture' %}#voice">Voice</a>
+    {% endif %}
+    <a href="{% url 'quotes:image_upload' %}" {% if n == 'image_upload' %}aria-current="page"{% endif %}>Photo</a>
+    <a href="{% url 'quotes:bulk_import' %}" {% if n == 'bulk_import' %}aria-current="page"{% endif %}>Import</a>
+</nav>
+{% endwith %}

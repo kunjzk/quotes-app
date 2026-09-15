@@ -269,10 +269,9 @@
   border-bottom: 1px solid var(--rule);
 }
 
-/* The trigger wears the current theme: graphite ring, accent-filled half. */
-.tint summary svg { color: var(--graphite); transition: color 0.15s; }
-.tint summary:hover svg { color: var(--ink); }
-.tint .half { fill: var(--teal); }
+/* One chip, two jobs: the trigger wears the palette in use, each row wears
+   the palette it would switch to. */
+.tint summary .sw { --sw-a: var(--sheet); --sw-b: var(--teal); }
 .tint .menu { min-width: 208px; }
 .tint .menu button { display: flex; align-items: center; gap: 10px; }
 .tint .menu button[aria-checked="true"]::after {
@@ -280,7 +279,7 @@
   margin-left: auto;
   padding-left: 10px;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--teal);
 }
 .tint .sw {

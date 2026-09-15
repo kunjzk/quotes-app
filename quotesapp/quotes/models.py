@@ -12,9 +12,12 @@ class QuoteManager(models.Manager):
 
 class Quote(models.Model):
     quote = models.TextField()
-    book = models.ForeignKey('Book', on_delete=models.CASCADE)
+    source = models.ForeignKey('Source', on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    # Where in the source the passage is: a page for print, a position in the
+    # audio (e.g. a song lyric at 2:31) for recordings.
     page_number = models.IntegerField(null=True, blank=True)
+    timestamp_seconds = models.PositiveIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -28,31 +31,59 @@ class Quote(models.Model):
     class Meta:
         constraints = [
             UniqueConstraint(
-                fields=["quote", "user", "book"],
+                fields=["quote", "user", "source"],
                 condition=Q(deleted_at__isnull=True),
-                name="unique_quote_per_user_per_book_when_not_deleted"
+                name="unique_quote_per_user_per_source_when_not_deleted"
             )
         ]
 
     def __str__(self):
         return self.quote
 
-class Book(models.Model):
+    @property
+    def location(self) -> str:
+        """Compact position for margins and lists: "42" or "2:31"."""
+        if self.page_number is not None:
+            return str(self.page_number)
+        if self.timestamp_seconds is not None:
+            return format_timestamp(self.timestamp_seconds)
+        return ""
+
+    @property
+    def location_label(self) -> str:
+        """Position for running text: "p. 42" or "2:31"."""
+        if self.page_number is not None:
+            return f"p. {self.page_number}"
+        return self.location
+
+
+def format_timestamp(seconds: int) -> str:
+    """2:31 under an hour, 1:02:03 beyond."""
+    hours, rest = divmod(seconds, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
+class Source(models.Model):
+    """Where a passage comes from: a book today, other kinds (e.g. songs) later."""
     title = models.CharField(max_length=255)
-    author = models.CharField(max_length=255)
+    # The author of a book; the artist, speaker or director for other kinds.
+    creator = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
             UniqueConstraint(
-                fields=["title", "author"],
-                name="unique_title_author"
+                fields=["title", "creator"],
+                name="unique_source_title_creator"
             )
         ]
 
     def __str__(self):
-        return f"{self.title} by {self.author}"
+        return f"{self.title} by {self.creator}"
 
 class User(AbstractUser):
     email = models.EmailField(unique=True, blank=False)
@@ -68,7 +99,7 @@ class TodayPreference(models.Model):
     Per-user criteria for the Today screen:
     "I want to see __ quotes by ____ author in ____ book."
 
-    Blank author / book_title mean "any".
+    Blank creator / source_title mean "any".
     """
     DEFAULT_QUOTE_COUNT = 3
     MIN_QUOTE_COUNT = 1
@@ -81,19 +112,19 @@ class TodayPreference(models.Model):
         default=DEFAULT_QUOTE_COUNT,
         validators=[MinValueValidator(MIN_QUOTE_COUNT), MaxValueValidator(MAX_QUOTE_COUNT)],
     )
-    author = models.CharField(max_length=255, blank=True, default="")
-    book_title = models.CharField(max_length=255, blank=True, default="")
+    creator = models.CharField(max_length=255, blank=True, default="")
+    source_title = models.CharField(max_length=255, blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
     @property
     def criteria_key(self) -> str:
         """Stable identifier for the current criteria, used to cache today's pick."""
-        return f"{self.quote_count}|{self.author.strip().casefold()}|{self.book_title.strip().casefold()}"
+        return f"{self.quote_count}|{self.creator.strip().casefold()}|{self.source_title.strip().casefold()}"
 
     def __str__(self):
         return (
             f"{self.user_id}: {self.quote_count} quotes by "
-            f"{self.author or 'any'} in {self.book_title or 'any'}"
+            f"{self.creator or 'any'} in {self.source_title or 'any'}"
         )
 
 

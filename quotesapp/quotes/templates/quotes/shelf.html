@@ -6,8 +6,8 @@
 <div class="shelf">
     <div class="shelf-head">
         <h1>Shelf</h1>
-        <span class="meta">{{ total_books }} book{{ total_books|pluralize }} · {{ total_passages }} passage{{ total_passages|pluralize }}</span>
-        {% if books %}
+        <span class="meta">{{ total_sources }} book{{ total_sources|pluralize }} · {{ total_passages }} passage{{ total_passages|pluralize }}</span>
+        {% if sources %}
         <label class="shelf-filter">
             <input id="shelf-filter" type="search" value="{{ query|default:'' }}" placeholder="Filter passages, books, authors" autocomplete="off" spellcheck="false" aria-label="Filter passages">
             <kbd>esc</kbd>
@@ -15,31 +15,31 @@
         {% endif %}
     </div>
 
-    {% if books %}
+    {% if sources %}
     <div class="shelf-body">
         <div class="rack">
-            <div class="books" id="books">
-                {% for book_data in books %}
+            <div class="spine-row" id="spines">
+                {% for entry in sources %}
                 <button type="button"
-                        class="spine {{ book_data.color }}"
-                        style="height: {{ book_data.height }}px"
-                        title="{{ book_data.book.title }}"
-                        data-book-id="{{ book_data.book.id }}"
-                        data-url="{% url 'quotes:book_quotes' book_data.book.id %}"
-                        aria-pressed="{% if not query and book_data.book.id == selected_book.id %}true{% else %}false{% endif %}">
-                    <span class="t">{{ book_data.book.title }}</span>
-                    <span class="n">{{ book_data.book.quote_count }}</span>
+                        class="spine {{ entry.color }}"
+                        style="height: {{ entry.height }}px"
+                        title="{{ entry.source.title }}"
+                        data-source-id="{{ entry.source.id }}"
+                        data-url="{% url 'quotes:source_quotes' entry.source.id %}"
+                        aria-pressed="{% if not query and entry.source.id == selected_source.id %}true{% else %}false{% endif %}">
+                    <span class="t">{{ entry.source.title }}</span>
+                    <span class="n">{{ entry.source.quote_count }}</span>
                 </button>
                 {% endfor %}
             </div>
             <div class="rack-cap">Taller spines hold more passages</div>
         </div>
 
-        <div id="book-detail" aria-live="polite">
+        <div id="source-detail" aria-live="polite">
             {% if query %}
                 {% include 'quotes/partials/passage_results.html' %}
-            {% elif selected_book %}
-                {% include 'quotes/partials/book_quotes.html' with book=selected_book quotes=selected_quotes %}
+            {% elif selected_source %}
+                {% include 'quotes/partials/source_quotes.html' with source=selected_source quotes=selected_quotes %}
             {% endif %}
         </div>
     </div>
@@ -53,10 +53,10 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% if books %}
+{% if sources %}
 <script>
     (() => {
-        const detail = document.getElementById('book-detail');
+        const detail = document.getElementById('source-detail');
         const spines = [...document.querySelectorAll('.spine')];
         const filter = document.getElementById('shelf-filter');
         const shelfUrl = "{% url 'quotes:shelf' %}";
@@ -82,7 +82,7 @@
 
         function markSpines(activeId, matchingIds) {
             spines.forEach((spine) => {
-                const id = spine.dataset.bookId;
+                const id = spine.dataset.sourceId;
                 spine.setAttribute('aria-pressed', String(id === activeId));
                 spine.classList.toggle('dim', !!matchingIds && !matchingIds.includes(id));
             });
@@ -90,8 +90,8 @@
 
         spines.forEach((spine) => spine.addEventListener('click', async () => {
             filter.value = '';
-            markSpines(spine.dataset.bookId, null);
-            history.replaceState(null, '', `${shelfUrl}?book=${spine.dataset.bookId}`);
+            markSpines(spine.dataset.sourceId, null);
+            history.replaceState(null, '', `${shelfUrl}?source=${spine.dataset.sourceId}`);
             if (await load(spine.dataset.url)) detail.scrollIntoView({ block: 'nearest' });
         }));
 
@@ -100,8 +100,8 @@
             const query = filter.value.trim();
             if (!query) {
                 const active = spines.find((s) => s.getAttribute('aria-pressed') === 'true') || spines[0];
-                markSpines(active.dataset.bookId, null);
-                history.replaceState(null, '', `${shelfUrl}?book=${active.dataset.bookId}`);
+                markSpines(active.dataset.sourceId, null);
+                history.replaceState(null, '', `${shelfUrl}?source=${active.dataset.sourceId}`);
                 await load(active.dataset.url);
                 return;
             }
@@ -109,7 +109,7 @@
             history.replaceState(null, '', `${shelfUrl}?${params}`);
             params.set('partial', 'results');
             if (await load(`${shelfUrl}?${params}`)) {
-                const matching = detail.firstElementChild?.dataset.matchingBooks;
+                const matching = detail.firstElementChild?.dataset.matchingSources;
                 markSpines(null, matching ? matching.split(',') : []);
             }
         }
@@ -126,7 +126,7 @@
         });
 
         {% if query %}
-        markSpines(null, "{{ matching_book_ids|join:',' }}".split(',').filter(Boolean));
+        markSpines(null, "{{ matching_source_ids|join:',' }}".split(',').filter(Boolean));
         {% endif %}
 
         document.addEventListener('submit', (e) => {

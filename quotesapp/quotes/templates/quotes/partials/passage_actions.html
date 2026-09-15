@@ -2,7 +2,7 @@
     <a href="{% url 'quotes:quote_edit' quote.id %}">edit</a>
     <form method="post" action="{% url 'quotes:quote_delete' quote.id %}" data-confirm="Delete this passage?">
         {% csrf_token %}
-        <input type="hidden" name="next" value="{% url 'quotes:shelf' %}?book={{ quote.book_id }}">
+        <input type="hidden" name="next" value="{% url 'quotes:shelf' %}?source={{ quote.source_id }}">
         <button type="submit">delete</button>
     </form>
 </div>

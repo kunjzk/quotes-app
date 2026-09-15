@@ -4,7 +4,13 @@
 
 /* ------------------------------------------------------------------ tokens */
 
+/* Every palette declares the same tokens, so the picker swaps a whole theme by
+   setting data-theme on <html>. --teal names the accent, whatever its hue. */
+
 :root {
+  color-scheme: light;
+
+  /* Light, which is also what "system" falls back to on a light desktop. */
   --paper: #e8ebe8;
   --sheet: #f0f2ef;
   --ink: #1a2332;
@@ -16,6 +22,7 @@
   --danger: #a33a2c;
   --backdrop: rgba(232, 235, 232, 0.82);
   --lift: 0 24px 60px -30px rgba(26, 35, 50, 0.45);
+
   --serif: "Newsreader", Georgia, "Times New Roman", serif;
   --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
 
@@ -23,8 +30,27 @@
   --grey: var(--graphite);
 }
 
+[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #181b1a;
+  --sheet: #1f2321;
+  --ink: #e4e0d5;
+  --graphite: #959c98;
+  --faint: #6a716d;
+  --rule: rgba(228, 224, 213, 0.1);
+  --teal: #86b8b4;
+  --teal-soft: rgba(134, 184, 180, 0.15);
+  --danger: #e08a7c;
+  --backdrop: rgba(24, 27, 26, 0.84);
+  --lift: 0 24px 60px -24px rgba(0, 0, 0, 0.9);
+}
+
+/* "System" is resolved here rather than in JavaScript, which also covers the
+   first paint and browsers with scripting off. Same values as dark above. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]),
+  [data-theme="system"] {
+    color-scheme: dark;
     --paper: #181b1a;
     --sheet: #1f2321;
     --ink: #e4e0d5;
@@ -37,6 +63,54 @@
     --backdrop: rgba(24, 27, 26, 0.84);
     --lift: 0 24px 60px -24px rgba(0, 0, 0, 0.9);
   }
+}
+
+/* Blush paper, plum ink, dusty rose accent. */
+[data-theme="pink"] {
+  color-scheme: light;
+  --paper: #f7ece9;
+  --sheet: #fdf5f3;
+  --ink: #42232f;
+  --graphite: #8b666f;
+  --faint: #b9959c;
+  --rule: rgba(66, 35, 47, 0.13);
+  --teal: #a8506a;
+  --teal-soft: rgba(168, 80, 106, 0.12);
+  --danger: #9b3324;
+  --backdrop: rgba(247, 236, 233, 0.84);
+  --lift: 0 24px 60px -30px rgba(66, 35, 47, 0.4);
+}
+
+/* Cold-pressed blue paper, navy ink, steel accent. */
+[data-theme="blue"] {
+  color-scheme: light;
+  --paper: #e7edf4;
+  --sheet: #f2f6fa;
+  --ink: #18283f;
+  --graphite: #61738a;
+  --faint: #94a3b5;
+  --rule: rgba(24, 40, 63, 0.13);
+  --teal: #2f5d92;
+  --teal-soft: rgba(47, 93, 146, 0.12);
+  --danger: #a3372c;
+  --backdrop: rgba(231, 237, 244, 0.84);
+  --lift: 0 24px 60px -30px rgba(24, 40, 63, 0.42);
+}
+
+/* Aged paperback: cream stock, sepia ink, bronze accent. */
+[data-theme="yellow"] {
+  color-scheme: light;
+  --paper: #f5efdd;
+  --sheet: #fbf6e9;
+  --ink: #33291a;
+  --graphite: #7a6c54;
+  --faint: #a99a80;
+  --rule: rgba(51, 41, 26, 0.14);
+  --teal: #8a6518;
+  --teal-soft: rgba(138, 101, 24, 0.13);
+  --danger: #9c3a22;
+  --backdrop: rgba(245, 239, 221, 0.85);
+  --lift: 0 24px 60px -30px rgba(51, 41, 26, 0.4);
 }
 
 /* -------------------------------------------------------------------- base */
@@ -151,8 +225,10 @@
 }
 .search-trigger:hover { border-color: var(--graphite); color: var(--ink); }
 .search-trigger .lbl { margin-right: auto; }
-.account { position: relative; }
-.account summary {
+.account,
+.tint { position: relative; }
+.account summary,
+.tint summary {
   list-style: none;
   width: 32px;
   height: 32px;
@@ -160,12 +236,16 @@
   border: 1px solid var(--rule);
   display: grid;
   place-items: center;
-  font-family: var(--mono);
-  font-size: 12px;
   cursor: pointer;
+  transition: border-color 0.15s;
 }
-.account summary::-webkit-details-marker { display: none; }
-.account .menu {
+.account summary { font-family: var(--mono); font-size: 12px; }
+.account summary:hover,
+.tint summary:hover { border-color: var(--graphite); }
+.account summary::-webkit-details-marker,
+.tint summary::-webkit-details-marker { display: none; }
+
+.menu {
   position: absolute;
   right: 0;
   top: 42px;
@@ -177,17 +257,46 @@
   border-radius: 4px;
   box-shadow: var(--lift);
 }
-.account .menu a,
-.account .menu button { display: block; width: 100%; text-align: left; padding: 8px 16px; font-size: 15px; }
-.account .menu a:hover,
-.account .menu button:hover { background: var(--teal-soft); }
-.account .who {
+.menu a,
+.menu button { display: block; width: 100%; text-align: left; padding: 8px 16px; font-size: 15px; }
+.menu a:hover,
+.menu button:hover { background: var(--teal-soft); }
+.menu .cap {
   padding: 8px 16px 10px;
   margin-bottom: 4px;
   font-size: 14px;
   color: var(--graphite);
   border-bottom: 1px solid var(--rule);
 }
+
+/* The trigger wears the current theme: graphite ring, accent-filled half. */
+.tint summary svg { color: var(--graphite); transition: color 0.15s; }
+.tint summary:hover svg { color: var(--ink); }
+.tint .half { fill: var(--teal); }
+.tint .menu { min-width: 208px; }
+.tint .menu button { display: flex; align-items: center; gap: 10px; }
+.tint .menu button[aria-checked="true"]::after {
+  content: "✓";
+  margin-left: auto;
+  padding-left: 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--teal);
+}
+.tint .sw {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--sw-a) 0 50%, var(--sw-b) 50%);
+  box-shadow: inset 0 0 0 1px rgba(128, 128, 128, 0.32);
+}
+.tint [data-theme-option="system"] { --sw-a: #f0f2ef; --sw-b: #1f2321; }
+.tint [data-theme-option="light"] { --sw-a: #f0f2ef; --sw-b: #2d6a6a; }
+.tint [data-theme-option="dark"] { --sw-a: #1f2321; --sw-b: #86b8b4; }
+.tint [data-theme-option="pink"] { --sw-a: #fdf5f3; --sw-b: #a8506a; }
+.tint [data-theme-option="blue"] { --sw-a: #f2f6fa; --sw-b: #2f5d92; }
+.tint [data-theme-option="yellow"] { --sw-a: #fbf6e9; --sw-b: #8a6518; }
 
 body.focus .bar,
 body.focus .criteria,

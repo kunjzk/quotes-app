@@ -3,7 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#e8ebe8">
     <title>{% block title %}ReadReadRead{% endblock %}</title>
+
+    <script>
+        // Runs before the first paint so the chosen palette never flashes.
+        (() => {
+            const themes = ['system', 'light', 'dark', 'pink', 'blue', 'yellow'];
+            let saved = null;
+            try { saved = localStorage.getItem('theme'); } catch { /* storage can be blocked */ }
+            document.documentElement.dataset.theme = themes.includes(saved) ? saved : 'system';
+        })();
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -23,15 +34,36 @@
             <a href="{% url 'quotes:capture' %}" {% if n == 'capture' or n == 'image_upload' or n == 'bulk_import' %}aria-current="page"{% endif %}>Capture</a>
         </nav>
         {% endwith %}
+        {% endif %}
         <div class="bar-right">
+            {% if user.is_authenticated %}
             <button class="search-trigger" id="open-search" type="button" aria-label="Search passages">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
                 <span class="lbl">Search passages</span><kbd>/</kbd>
             </button>
+            {% endif %}
+            <details class="tint" id="tint">
+                <summary aria-label="Appearance" title="Appearance">
+                    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                        <path class="half" d="M12 3a9 9 0 0 1 0 18Z"/>
+                    </svg>
+                </summary>
+                <div class="menu" role="radiogroup" aria-labelledby="tint-cap">
+                    <span class="cap" id="tint-cap">Appearance</span>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="light"><span class="sw"></span>Light</button>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="dark"><span class="sw"></span>Dark</button>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="system"><span class="sw"></span>Follow system</button>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="pink"><span class="sw"></span>Elegant pink</button>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="blue"><span class="sw"></span>Elegant blue</button>
+                    <button type="button" role="radio" aria-checked="false" data-theme-option="yellow"><span class="sw"></span>Faint yellow</button>
+                </div>
+            </details>
+            {% if user.is_authenticated %}
             <details class="account">
                 <summary aria-label="Account menu">{{ user.first_name|default:user.username|slice:":1"|upper }}</summary>
                 <div class="menu">
-                    <span class="who">Signed in as {{ user.first_name|default:user.username }}</span>
+                    <span class="cap">Signed in as {{ user.first_name|default:user.username }}</span>
                     {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}
@@ -39,8 +71,8 @@
                     </form>
                 </div>
             </details>
+            {% endif %}
         </div>
-        {% endif %}
     </header>
 
     <main>
@@ -83,12 +115,64 @@
             document.getElementById('bar').classList.toggle('scrolled', scrollY > 4);
         }, { passive: true });
 
-        // Close the account menu when clicking elsewhere.
+        // Close the bar menus when clicking elsewhere.
         document.addEventListener('click', (e) => {
-            document.querySelectorAll('details.account[open]').forEach((d) => {
+            document.querySelectorAll('details.account[open], details.tint[open]').forEach((d) => {
                 if (!d.contains(e.target)) d.removeAttribute('open');
             });
         });
+
+        // Appearance: the head script applies the stored palette, this picks it.
+        (() => {
+            const picker = document.getElementById('tint');
+            const options = [...picker.querySelectorAll('[data-theme-option]')];
+            const root = document.documentElement;
+            const meta = document.querySelector('meta[name="theme-color"]');
+
+            function sync() {
+                options.forEach((o) => o.setAttribute('aria-checked', String(o.dataset.themeOption === root.dataset.theme)));
+                meta.content = getComputedStyle(root).getPropertyValue('--paper').trim();
+            }
+
+            function choose(theme) {
+                try { localStorage.setItem('theme', theme); } catch { /* storage can be blocked */ }
+                const apply = () => { root.dataset.theme = theme; sync(); };
+                // Crossfades the whole page, so no element changes colour alone.
+                if (document.startViewTransition && document.visibilityState === 'visible') {
+                    document.startViewTransition(apply).ready.catch(() => {});
+                } else {
+                    apply();
+                }
+            }
+
+            options.forEach((option) => option.addEventListener('click', () => {
+                choose(option.dataset.themeOption);
+                picker.removeAttribute('open');
+            }));
+
+            // Arrows walk the palettes, trying each one on as they go.
+            picker.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    picker.removeAttribute('open');
+                    picker.querySelector('summary').focus();
+                    return;
+                }
+                if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                e.preventDefault();
+                const step = e.key === 'ArrowDown' ? 1 : -1;
+                const at = options.indexOf(document.activeElement);
+                const next = at === -1
+                    ? (step === 1 ? 0 : options.length - 1)
+                    : (at + step + options.length) % options.length;
+                options[next].focus();
+                choose(options[next].dataset.themeOption);
+            });
+
+            // "Follow system" keeps up with the desktop switching to dark.
+            matchMedia('(prefers-color-scheme: dark)').addEventListener('change', sync);
+
+            sync();
+        })();
     </script>
 
     {% if user.is_authenticated %}

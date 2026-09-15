@@ -587,6 +587,47 @@ mark { background: var(--teal-soft); color: inherit; padding: 0 0.08em; border-r
 .save:disabled { opacity: 0.5; }
 .save kbd { color: inherit; border-color: currentColor; opacity: 0.55; }
 
+/* Photo crop step */
+.crop-step { margin-bottom: 32px; }
+.crop-hint { margin: 0 0 14px; color: var(--graphite); }
+.cropper-frame { display: flex; justify-content: center; padding: 12px; }
+.cropper {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  line-height: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: crosshair;
+}
+.cropper img { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; pointer-events: none; }
+.crop-shade-clip { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.crop-shade { position: absolute; box-shadow: 0 0 0 9999px rgba(16, 20, 24, 0.55); }
+.crop-box { position: absolute; outline: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); cursor: move; }
+.crop-box:focus-visible { outline: 2px solid var(--teal); outline-offset: 0; }
+.crop-handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+/* A larger invisible target for fingers. */
+.crop-handle::before { content: ""; position: absolute; inset: -13px; }
+.crop-handle[data-handle="nw"] { left: 0; top: 0; cursor: nwse-resize; }
+.crop-handle[data-handle="n"] { left: 50%; top: 0; cursor: ns-resize; }
+.crop-handle[data-handle="ne"] { left: 100%; top: 0; cursor: nesw-resize; }
+.crop-handle[data-handle="e"] { left: 100%; top: 50%; cursor: ew-resize; }
+.crop-handle[data-handle="se"] { left: 100%; top: 100%; cursor: nwse-resize; }
+.crop-handle[data-handle="s"] { left: 50%; top: 100%; cursor: ns-resize; }
+.crop-handle[data-handle="sw"] { left: 0; top: 100%; cursor: nesw-resize; }
+.crop-handle[data-handle="w"] { left: 0; top: 50%; cursor: ew-resize; }
+.crop-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; margin-top: 18px; }
+.crop-actions .save { margin-left: auto; }
+
 .capture-panel h1 { margin: 0 0 6px; font-size: 26px; font-weight: 500; }
 .capture-panel .lede { margin: 0 0 28px; color: var(--graphite); }
 

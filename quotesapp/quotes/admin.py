@@ -19,7 +19,7 @@ class QuotesUserAdmin(UserAdmin):
 
 @admin.register(Source)
 class SourceAdmin(admin.ModelAdmin):
-    list_display = ("title", "creator", "kind", "created_at")
+    list_display = ("title", "creator", "kind", "collection", "created_at")
     list_filter = ("kind",)
 
 

@@ -57,7 +57,7 @@ def validate_quote_creation_input(quote_text: str, source: Source|None, title: s
     if page_number and page_number < 0:
         raise ValueError("Page number must be greater than or equal to 0.")
 
-def create_quote(quote_text: str, source: Source|None, title: str|None, creator: str|None, page_number: int|None, user: User, kind: str = DEFAULT_KIND, timestamp_seconds: int|None = None) -> QuoteCreationResult:
+def create_quote(quote_text: str, source: Source|None, title: str|None, creator: str|None, page_number: int|None, user: User, kind: str = DEFAULT_KIND, timestamp_seconds: int|None = None, collection: str = "") -> QuoteCreationResult:
     """
     Create a quote.
     If the quote validation fails, then the error message is returned.
@@ -75,7 +75,9 @@ def create_quote(quote_text: str, source: Source|None, title: str|None, creator:
                     title=title,
                     creator=creator,
                     kind=get_kind(kind).value,
+                    defaults={"collection": collection},
                 )
+        remember_collection(source, collection)
         existing_quote = Quote.objects.filter(
             quote=quote_text,
             source=source,
@@ -103,7 +105,7 @@ TIMESTAMP_PATTERN = re.compile(r'(?<![\d:])(?:at\s+)?(\d{1,3}):([0-5]\d)(?::([0-
 def parse_attribution(line: str, kind: str = DEFAULT_KIND) -> dict:
     """
     Read an attribution line - "— walden | Thoreau | p. 90", or
-    "— Heroes | David Bowie | 2:31" for a song - into its parts.
+    "— Lazarus | David Bowie | Blackstar | 2:31" for a song - into its parts.
 
     Which position is looked for depends on the kind: a page for print, a
     timestamp for recordings, so a page number in a song title (or the other
@@ -129,15 +131,23 @@ def parse_attribution(line: str, kind: str = DEFAULT_KIND) -> dict:
             rest = PAGE_PATTERN.sub("", rest).strip()
 
     parts = [part.strip() for part in rest.split("|")]
-    title = parts[0] if parts else ""
-    creator = parts[1] if len(parts) > 1 else ""
-    # A trailing separator is left over when the position was the last part.
+    spec = get_kind(kind)
     return {
-        "title": title.rstrip("|").strip(),
-        "creator": creator,
+        "title": parts[0].strip() if parts else "",
+        "creator": parts[1] if len(parts) > 1 else "",
+        # Only kinds with a collection read a third part as one.
+        "collection": parts[2] if len(parts) > 2 and spec.collection_label else "",
         "page_number": page_number,
         "timestamp_seconds": timestamp_seconds,
     }
+
+
+def remember_collection(source: Source, collection: str) -> None:
+    """Fill in a source's collection the first time one is given for it."""
+    collection = (collection or "").strip()
+    if collection and not source.collection and source.kind_spec.collection_label:
+        source.collection = collection
+        source.save(update_fields=["collection"])
 
 
 def find_quotes_and_send_email(user_id: int) -> None:
@@ -227,11 +237,29 @@ def _filter_field(queryset: QuerySet, field: str, value: str) -> QuerySet:
 
 
 def filter_quotes_for_today(user: User, creator: str = "", source_title: str = "") -> QuerySet[Quote]:
-    """Narrow the user's quotes to the chosen creator and/or source ("" means any)."""
+    """
+    Narrow the user's quotes to the chosen creator and/or source ("" means any).
+
+    The source blank takes a title or, for kinds that have one, a collection:
+    "Blackstar" finds every lyric from a song on that album.
+    """
     quotes = Quote.objects.filter(user=user).select_related("source")
     quotes = _filter_field(quotes, "source__creator", creator)
-    quotes = _filter_field(quotes, "source__title", source_title)
+    quotes = _filter_source(quotes, source_title)
     return quotes
+
+
+def _filter_source(queryset: QuerySet, value: str) -> QuerySet:
+    """Match the source's title first, then its collection, exact before partial."""
+    value = (value or "").strip()
+    if not value:
+        return queryset
+    for lookup in ("source__title__iexact", "source__collection__iexact",
+                   "source__title__icontains", "source__collection__icontains"):
+        match = queryset.filter(**{lookup: value})
+        if match.exists():
+            return match
+    return queryset.none()
 
 
 def recency_weight(quote: Quote, now) -> float:
@@ -327,8 +355,14 @@ def suggest_today_values(user: User, field: str, query: str = "", creator: str =
 
     if field == "source":
         sources = _filter_field(sources, "creator", normalize_criteria_value(creator))
-        values = sources.filter(title__icontains=query).values_list("title", flat=True)
-        return list(values.order_by("title").distinct()[:limit])
+        titles = sources.filter(title__icontains=query).values_list("title", flat=True)
+        # Albums sit alongside song titles: either can fill the blank.
+        collections = (
+            sources.exclude(collection="")
+            .filter(collection__icontains=query)
+            .values_list("collection", flat=True)
+        )
+        return sorted(set(titles) | set(collections), key=str.casefold)[:limit]
 
     raise ValueError(f"Unknown suggestion field: {field}")
 
@@ -341,6 +375,7 @@ def search_passages(user: User, query: str) -> QuerySet[Quote]:
             Q(quote__icontains=query)
             | Q(source__title__icontains=query)
             | Q(source__creator__icontains=query)
+            | Q(source__collection__icontains=query)
         )
         .select_related("source")
         .order_by("source__title", "page_number", "timestamp_seconds", "id")

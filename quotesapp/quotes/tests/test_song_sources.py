@@ -5,7 +5,13 @@ from django.urls import reverse
 
 from quotes.models import Quote, Source
 from quotes.ocr_service import build_ocr_result
-from quotes.services import create_quote, parse_attribution
+from quotes.services import (
+    create_quote,
+    filter_quotes_for_today,
+    parse_attribution,
+    search_passages,
+    suggest_today_values,
+)
 from quotes.source_kinds import SOURCE_KINDS, get_kind, kinds_context
 from quotes.tests.test_ocr import tesseract_data
 
@@ -28,8 +34,9 @@ class SourceKindsTest(SimpleTestCase):
         for kind in kinds:
             self.assertEqual(
                 set(kind),
-                {"value", "label", "title_label", "creator_label", "attribution_hint",
-                 "locator", "locator_label", "locator_hint", "marker", "keeps_line_breaks"},
+                {"value", "label", "title_label", "creator_label", "collection_label",
+                 "attribution_hint", "locator", "locator_label", "locator_hint",
+                 "marker", "keeps_line_breaks"},
             )
 
     def test_songs_keep_line_breaks_and_books_do_not(self):
@@ -58,12 +65,25 @@ class ParseAttributionTest(SimpleTestCase):
     def test_book_page(self):
         self.assertEqual(
             parse_attribution("— walden | Henry David Thoreau | p. 90"),
-            {"title": "walden", "creator": "Henry David Thoreau", "page_number": 90, "timestamp_seconds": None},
+            {"title": "walden", "creator": "Henry David Thoreau", "collection": "",
+             "page_number": 90, "timestamp_seconds": None},
         )
+
+    def test_song_album(self):
+        parsed = parse_attribution("— Lazarus | David Bowie | Blackstar | 2:31", kind="song")
+        self.assertEqual(parsed, {
+            "title": "Lazarus", "creator": "David Bowie", "collection": "Blackstar",
+            "page_number": None, "timestamp_seconds": 151,
+        })
+
+    def test_books_have_no_collection(self):
+        parsed = parse_attribution("— Walden | Thoreau | Modern Library | p. 90")
+        self.assertEqual(parsed["collection"], "")
 
     def test_song_timestamp(self):
         parsed = parse_attribution("— Heroes | David Bowie | 2:31", kind="song")
-        self.assertEqual(parsed, {"title": "Heroes", "creator": "David Bowie", "page_number": None, "timestamp_seconds": 151})
+        self.assertEqual(parsed, {"title": "Heroes", "creator": "David Bowie", "collection": "",
+                                  "page_number": None, "timestamp_seconds": 151})
 
     def test_song_timestamp_variants(self):
         for text, seconds in [("Heroes at 2:31", 151), ("Heroes 0:07", 7), ("A Day in the Life 1:02:03", 3723)]:
@@ -137,7 +157,10 @@ class CaptureSongTest(TestCase):
         song = Source.objects.create(title="Heroes", creator="David Bowie", kind="song")
         Quote.objects.create(user=self.user, source=song, quote=LYRIC)
         data = self.client.get(reverse("quotes:source_suggest"), {"q": "her"}).json()
-        self.assertEqual(data["suggestions"], [{"title": "Heroes", "creator": "David Bowie", "kind": "song"}])
+        self.assertEqual(
+            data["suggestions"],
+            [{"title": "Heroes", "creator": "David Bowie", "kind": "song", "collection": ""}],
+        )
 
     def test_the_capture_page_carries_the_kind_definitions(self):
         resp = self.client.get(reverse("quotes:capture"))
@@ -189,3 +212,90 @@ class OCRLinesTest(SimpleTestCase):
     def test_empty_read(self):
         result = build_ocr_result(tesseract_data([]))
         self.assertEqual((result.text, result.lines), ("", ""))
+
+
+class AlbumTest(TestCase):
+    """A song's album: another way to fill the source blank on Today."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(username="listener", email="l@example.com", password="pw")
+        self.client.login(username="listener", password="pw")
+        self.lazarus = Source.objects.create(
+            title="Lazarus", creator="David Bowie", kind="song", collection="Blackstar"
+        )
+        self.dollar = Source.objects.create(
+            title="Dollar Days", creator="David Bowie", kind="song", collection="Blackstar"
+        )
+        self.walden = Source.objects.create(title="Walden", creator="Henry David Thoreau")
+        Quote.objects.create(user=self.user, source=self.lazarus, quote="Look up here, I'm in heaven")
+        Quote.objects.create(user=self.user, source=self.dollar, quote="I'm dying to push their backs against the grain")
+        Quote.objects.create(user=self.user, source=self.walden, quote="Simplify, simplify.", page_number=91)
+
+    def test_the_source_blank_takes_an_album(self):
+        quotes = filter_quotes_for_today(self.user, source_title="Blackstar")
+        self.assertEqual({q.source for q in quotes}, {self.lazarus, self.dollar})
+
+    def test_a_song_title_still_wins_over_a_partial_album_match(self):
+        quotes = filter_quotes_for_today(self.user, source_title="Lazarus")
+        self.assertEqual([q.source for q in quotes], [self.lazarus])
+
+    def test_suggestions_offer_songs_and_albums(self):
+        self.assertEqual(
+            suggest_today_values(self.user, "source", creator="David Bowie"),
+            ["Blackstar", "Dollar Days", "Lazarus"],
+        )
+        self.assertEqual(suggest_today_values(self.user, "source", query="black"), ["Blackstar"])
+
+    def test_books_never_offer_a_collection(self):
+        self.assertEqual(suggest_today_values(self.user, "source", creator="Henry David Thoreau"), ["Walden"])
+
+    def test_search_matches_albums(self):
+        found = search_passages(self.user, "blackstar")
+        self.assertEqual({q.source for q in found}, {self.lazarus, self.dollar})
+
+    def test_capture_records_the_album(self):
+        data = self.client.post(reverse("quotes:capture"), {
+            "content": "Something happened on the day he died\n— Blackstar | David Bowie | Blackstar | 4:12",
+            "kind": "song",
+        }).json()
+        source = Quote.objects.get(pk=data["quote_id"]).source
+        self.assertEqual((source.title, source.collection, source.kind), ("Blackstar", "Blackstar", "song"))
+
+    def test_an_album_given_later_fills_in_the_song_saved_without_one(self):
+        song = Source.objects.create(title="Heroes", creator="David Bowie", kind="song")
+        self.client.post(reverse("quotes:capture"), {
+            "content": "We can be heroes\n— Heroes | David Bowie | Heroes | 2:31",
+            "kind": "song",
+        })
+        song.refresh_from_db()
+        self.assertEqual(song.collection, "Heroes")
+        self.assertEqual(Source.objects.filter(title="Heroes", kind="song").count(), 1)
+
+    def test_an_album_is_not_overwritten(self):
+        self.client.post(reverse("quotes:capture"), {
+            "content": "Look up here\n— Lazarus | David Bowie | Greatest Hits | 0:10",
+            "kind": "song",
+        })
+        self.lazarus.refresh_from_db()
+        self.assertEqual(self.lazarus.collection, "Blackstar")
+
+    def test_books_ignore_a_third_part(self):
+        self.client.post(reverse("quotes:capture"), {
+            "content": "A line.\n— Walden | Henry David Thoreau | Modern Library | p. 5",
+        })
+        self.walden.refresh_from_db()
+        self.assertEqual(self.walden.collection, "")
+
+
+class CriteriaSentenceTest(TestCase):
+    def test_the_sentence_reads_by_author_from_source(self):
+        user = User.objects.create_user(username="reader", email="r@example.com", password="pw")
+        source = Source.objects.create(title="Walden", creator="Henry David Thoreau")
+        Quote.objects.create(user=user, source=source, quote="Simplify, simplify.")
+        self.client.login(username="reader", password="pw")
+        content = self.client.get(reverse("quotes:today")).content.decode()
+        self.assertIn("I want to see", content)
+        self.assertIn("author from", content)
+        self.assertIn("source.", content)
+        self.assertNotIn("author in", content)

@@ -36,7 +36,7 @@
                        aria-autocomplete="list">
                 <ul class="suggestions" role="listbox" hidden></ul>
             </span>
-            author in
+            author from
             <span class="blank">
                 <input id="criteria-source"
                        name="source"
@@ -45,11 +45,11 @@
                        value="{{ preference.source_title }}"
                        maxlength="255"
                        spellcheck="false"
-                       aria-label="Book"
+                       aria-label="Source"
                        aria-autocomplete="list">
                 <ul class="suggestions" role="listbox" hidden></ul>
             </span>
-            book.
+            source.
             <button type="button" id="clear-filter" class="clear-filter"{% if not is_filtered %} hidden{% endif %}>clear ×</button>
         </form>
         <p id="criteria-error" class="criteria-error" role="alert" hidden></p>
@@ -122,7 +122,7 @@
         if (Math.abs(diff) > 50) showPage(currentPage + (diff > 0 ? 1 : -1));
     });
 
-    // ---- Criteria sentence: "I want to see __ quotes by __ author in __ book."
+    // ---- Criteria sentence: "I want to see __ quotes by __ author from __ source."
     (function () {
         const root = document.getElementById('criteria');
         const form = document.getElementById('criteria-form');

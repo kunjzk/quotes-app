@@ -90,8 +90,8 @@
                     rest = rest.replace(/\s*\b(?:p\.?|page)\s*\d+/gi, '').trim();
                 }
             }
-            const [title = '', creator = ''] = rest.split('|').map((part) => part.trim());
-            return { title: title.replace(/\|$/, '').trim(), creator, location };
+            const [title = '', creator = '', collection = ''] = rest.split('|').map((part) => part.trim());
+            return { title, creator, collection: kind.collection_label ? collection : '', location };
         }
 
         let suggestions = [];
@@ -100,12 +100,13 @@
         let debounce;
 
         function renderParsed() {
-            const { title, creator, location } = parseAttribution(attrInput.value);
+            const { title, creator, collection, location } = parseAttribution(attrInput.value);
             if (!title) {
-                parsed.innerHTML = `<span>${escapeHtml(kind.title_label)}, then optionally ${escapeHtml(kind.creator_label.toLowerCase())} and ${escapeHtml(kind.locator)}. Only the ${escapeHtml(kind.label.toLowerCase())} is required.</span>`;
+                const optional = [kind.creator_label, kind.collection_label, kind.locator].filter(Boolean).map((w) => w.toLowerCase());
+                parsed.innerHTML = `<span>${escapeHtml(kind.title_label)}, then optionally ${escapeHtml(optional.slice(0, -1).join(', '))} and ${escapeHtml(optional.at(-1))}. Only the ${escapeHtml(kind.label.toLowerCase())} is required.</span>`;
                 return;
             }
-            const known = suggestions.find((s) => s.title.toLowerCase() === title.toLowerCase());
+            const known = suggestions.find((s) => s.title.toLowerCase() === title.toLowerCase() && s.kind === kind.value);
             const bits = [];
             if (known) {
                 bits.push('<span class="dot"></span>', `<span>${escapeHtml(known.title)}</span>`);
@@ -114,6 +115,8 @@
                 bits.push('<span class="new">New to your shelf</span>', `<span>${escapeHtml(title)}</span>`);
                 if (creator) bits.push('<span>·</span>', `<span>${escapeHtml(creator)}</span>`);
             }
+            const album = collection || (known && known.collection) || '';
+            if (album) bits.push('<span>·</span>', `<span>${escapeHtml(album)}</span>`);
             if (location) bits.push('<span>·</span>', `<span>${escapeHtml(location)}</span>`);
             parsed.innerHTML = bits.join('');
         }
@@ -160,9 +163,10 @@
         }
 
         function chooseSource(title, sourceKind) {
-            const { location } = parseAttribution(attrInput.value);
+            const { creator, collection, location } = parseAttribution(attrInput.value);
             if (sourceKind && sourceKind !== kind.value) setKind(sourceKind);
-            attrInput.value = title + (location ? ` ${location}` : '');
+            const rest = [creator, collection].filter(Boolean).map((part) => ` | ${part}`).join('');
+            attrInput.value = title + rest + (location ? ` ${location}` : '');
             closePop();
             renderParsed();
         }

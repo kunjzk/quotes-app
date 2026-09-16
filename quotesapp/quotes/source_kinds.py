@@ -15,6 +15,9 @@ class SourceKind:
     label: str
     title_label: str
     creator_label: str
+    # What the source belongs to, when the kind has one: an album for songs,
+    # a show for podcasts. Blank means the kind has no such grouping.
+    collection_label: str
     # Placeholder for Capture's attribution line.
     attribution_hint: str
     # Where a passage sits: a page for print, a position in audio for recordings.
@@ -32,6 +35,7 @@ BOOK = SourceKind(
     label="Book",
     title_label="Book title",
     creator_label="Author",
+    collection_label="",
     attribution_hint="book | author | p. 42",
     locator="page",
     locator_label="Page number (optional)",
@@ -43,7 +47,8 @@ SONG = SourceKind(
     label="Song",
     title_label="Song",
     creator_label="Artist",
-    attribution_hint="song | artist | 2:31",
+    collection_label="Album",
+    attribution_hint="song | artist | album | 2:31",
     locator="timestamp",
     locator_label="Timestamp (optional)",
     locator_hint="e.g. 2:31",

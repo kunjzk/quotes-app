@@ -119,6 +119,10 @@
                         <input type="text" id="creator" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter author name" autocomplete="off">
                         <div id="creator-suggestions" class="absolute z-10 w-full mt-1 hidden"></div>
                     </div>
+                    <div id="collection-field" hidden>
+                        <label for="collection" id="collection-label" class="block text-sm font-medium mb-1">Album</label>
+                        <input type="text" id="collection" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter album" autocomplete="off">
+                    </div>
                     <div>
                         <label for="location" id="location-label" class="block text-sm font-medium mb-1">Page number (optional)</label>
                         <input type="number" id="location" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="e.g. 42">
@@ -192,6 +196,12 @@ function setKind(value) {
     document.getElementById('source-title').placeholder = `Enter ${kind.title_label.toLowerCase()}`;
     document.getElementById('creator-label').textContent = kind.creator_label;
     document.getElementById('creator').placeholder = `Enter ${kind.creator_label.toLowerCase()} name`;
+    // Only kinds that group their sources show the field, e.g. a song's album.
+    document.getElementById('collection-field').hidden = !kind.collection_label;
+    if (kind.collection_label) {
+        document.getElementById('collection-label').textContent = kind.collection_label;
+        document.getElementById('collection').placeholder = `Enter ${kind.collection_label.toLowerCase()}`;
+    }
     const location = document.getElementById('location');
     document.getElementById('location-label').textContent = kind.locator_label;
     location.type = kind.locator === 'page' ? 'number' : 'text';
@@ -471,6 +481,7 @@ async function saveAllQuotes() {
     const sourceTitle = document.getElementById('source-title').value.trim();
     const creator = document.getElementById('creator').value.trim();
     const location = document.getElementById('location').value.trim();
+    const collection = kind.collection_label ? document.getElementById('collection').value.trim() : '';
     
     if (selectedQuotes.length === 0) {
         alert('Please select at least one quote');
@@ -496,7 +507,8 @@ async function saveAllQuotes() {
             formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
             
             const position = location ? (kind.locator === 'page' ? ` p. ${location}` : ` ${location}`) : '';
-            const attribution = `— ${sourceTitle} | ${creator}${position}`;
+            const album = collection ? ` | ${collection}` : '';
+            const attribution = `— ${sourceTitle} | ${creator}${album}${position}`;
             const fullContent = quote.text + '\n' + attribution;
             
             const response = await fetch('{% url "quotes:capture" %}', {
@@ -600,7 +612,7 @@ async function fetchCreatorSuggestions(query) {
 function displaySourceSuggestions(suggestions) {
     sourceTitleSuggestions.innerHTML = '<div class="autocomplete-container">' +
         suggestions.map(s => `
-            <div class="autocomplete-item" onclick="selectSourceSuggestion('${escapeHtml(s.title)}', '${escapeHtml(s.creator)}', '${escapeHtml(s.kind)}')">
+            <div class="autocomplete-item" onclick="selectSourceSuggestion('${escapeHtml(s.title)}', '${escapeHtml(s.creator)}', '${escapeHtml(s.kind)}', '${escapeHtml(s.collection || '')}')">
                 <div class="font-semibold">${escapeHtml(s.title)}</div>
                 <div class="text-sm" style="color: var(--grey);">${escapeHtml(s.creator)}</div>
             </div>
@@ -620,10 +632,11 @@ function displayCreatorSuggestions(suggestions) {
     creatorSuggestions.classList.remove('hidden');
 }
 
-function selectSourceSuggestion(title, creator, sourceKind) {
+function selectSourceSuggestion(title, creator, sourceKind, collection) {
     if (sourceKind && sourceKind !== kind.value) setKind(sourceKind);
     sourceTitleInput.value = title;
     creatorInput.value = creator;
+    if (collection && kind.collection_label) document.getElementById('collection').value = collection;
     sourceTitleSuggestions.classList.add('hidden');
 }
 

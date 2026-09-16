@@ -84,6 +84,9 @@ class Source(models.Model):
     title = models.CharField(max_length=255)
     # The author of a book; the artist, speaker or director for other kinds.
     creator = models.CharField(max_length=255)
+    # What the source belongs to, where the kind has one: a song's album.
+    # Not part of a source's identity, so it can be filled in later.
+    collection = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -109,6 +112,10 @@ class Source(models.Model):
     def marker(self) -> str:
         return self.kind_spec.marker
 
+    @property
+    def collection_label(self) -> str:
+        return self.kind_spec.collection_label
+
 class User(AbstractUser):
     email = models.EmailField(unique=True, blank=False)
     first_name = models.CharField(max_length=255, blank=False)
@@ -121,7 +128,7 @@ class User(AbstractUser):
 class TodayPreference(models.Model):
     """
     Per-user criteria for the Today screen:
-    "I want to see __ quotes by ____ author in ____ book."
+    "I want to see __ quotes by ____ author from ____ source."
 
     Blank creator / source_title mean "any".
     """

@@ -272,7 +272,10 @@ class CaptureView(LoginRequiredMixin, TemplateView):
                 if source_title else None
             )
             if source_title and not source and not creator:
-                source = Source.objects.create(title=source_title, creator='', kind=kind)
+                source = Source.objects.create(
+                    title=source_title, creator='', kind=kind,
+                    collection=attribution.get('collection', ''),
+                )
 
             result = create_quote(
                 quote_text,
@@ -283,6 +286,7 @@ class CaptureView(LoginRequiredMixin, TemplateView):
                 request.user,
                 kind=kind,
                 timestamp_seconds=attribution.get('timestamp_seconds'),
+                collection=attribution.get('collection', ''),
             )
         except Exception as e:
             logger.error(f"Error creating quote: {e}")
@@ -429,7 +433,10 @@ class SourceSuggestView(LoginRequiredMixin, View):
         ).distinct()[:5]
         
         suggestions = [
-            {'title': source.title, 'creator': source.creator, 'kind': source.kind}
+            {
+                'title': source.title, 'creator': source.creator,
+                'kind': source.kind, 'collection': source.collection,
+            }
             for source in sources
         ]
         

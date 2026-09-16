@@ -237,19 +237,19 @@
                 if (id !== requestId) return;
 
                 const passages = data.passages.map((p) => `
-                    <a class="pitem" href="${shelfUrl}?book=${p.book_id}#q${p.id}">
+                    <a class="pitem" href="${shelfUrl}?source=${p.source_id}#q${p.id}">
                         <span class="main">${highlight(p.text, query)}</span>
-                        <span class="sub">${escapeHtml(p.book)}${p.page ? ` · p. ${p.page}` : ''}</span>
+                        <span class="sub">${escapeHtml(p.source)}${p.location ? ` · ${escapeHtml(p.location)}` : ''}</span>
                     </a>`).join('');
-                const books = data.books.map((b) => `
-                    <a class="pitem" href="${shelfUrl}?book=${b.id}">
-                        <span class="main">${highlight(b.title, query)}</span>
-                        <span class="sub">${highlight(b.author, query)} · ${b.count} passage${b.count === 1 ? '' : 's'}</span>
+                const sources = data.sources.map((s) => `
+                    <a class="pitem" href="${shelfUrl}?source=${s.id}">
+                        <span class="main">${highlight(s.title, query)}</span>
+                        <span class="sub">${highlight(s.creator, query)} · ${s.count} passage${s.count === 1 ? '' : 's'}</span>
                     </a>`).join('');
 
                 results.innerHTML =
                     ((passages ? `<div class="pgroup">Passages</div>${passages}` : '') +
-                     (books ? `<div class="pgroup">Books</div>${books}` : '')) ||
+                     (sources ? `<div class="pgroup">Books</div>${sources}` : '')) ||
                     `<p class="pnone">Nothing in your passages matches “${escapeHtml(query)}”.</p>`;
                 selected = 0;
                 mark();

@@ -7,7 +7,7 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from quotes.models import Book, Quote, TodayPreference, TodaySelection
+from quotes.models import Source, Quote, TodayPreference, TodaySelection
 from quotes.services import (
     filter_quotes_for_today,
     get_todays_quotes,
@@ -29,25 +29,25 @@ class TodayTestMixin:
         self.other = User.objects.create_user(
             username="other", email="other@example.com", password="pw"
         )
-        self.walden = Book.objects.create(title="Walden", author="Henry David Thoreau")
-        self.civil = Book.objects.create(title="Civil Disobedience", author="Henry David Thoreau")
-        self.dune = Book.objects.create(title="Dune", author="Frank Herbert")
+        self.walden = Source.objects.create(title="Walden", creator="Henry David Thoreau")
+        self.civil = Source.objects.create(title="Civil Disobedience", creator="Henry David Thoreau")
+        self.dune = Source.objects.create(title="Dune", creator="Frank Herbert")
 
         self.walden_quotes = [
-            Quote.objects.create(user=self.user, book=self.walden, quote=f"Walden {i}")
+            Quote.objects.create(user=self.user, source=self.walden, quote=f"Walden {i}")
             for i in range(4)
         ]
         self.civil_quotes = [
-            Quote.objects.create(user=self.user, book=self.civil, quote=f"Civil {i}")
+            Quote.objects.create(user=self.user, source=self.civil, quote=f"Civil {i}")
             for i in range(2)
         ]
         self.dune_quotes = [
-            Quote.objects.create(user=self.user, book=self.dune, quote=f"Dune {i}")
+            Quote.objects.create(user=self.user, source=self.dune, quote=f"Dune {i}")
             for i in range(3)
         ]
-        # Another user's quote in a book the reader has never quoted.
-        self.secret = Book.objects.create(title="Secret Book", author="Nobody Known")
-        Quote.objects.create(user=self.other, book=self.secret, quote="Not yours")
+        # Another user's quote in a source the reader has never quoted.
+        self.secret = Source.objects.create(title="Secret Book", creator="Nobody Known")
+        Quote.objects.create(user=self.other, source=self.secret, quote="Not yours")
 
 
 class FilterQuotesTest(TodayTestMixin, TestCase):
@@ -57,31 +57,31 @@ class FilterQuotesTest(TodayTestMixin, TestCase):
         self.assertFalse(quotes.filter(user=self.other).exists())
 
     def test_filter_by_author_is_case_insensitive(self):
-        quotes = filter_quotes_for_today(self.user, author="henry david thoreau")
+        quotes = filter_quotes_for_today(self.user, creator="henry david thoreau")
         self.assertEqual(quotes.count(), 6)
-        self.assertTrue(all(q.book.author == "Henry David Thoreau" for q in quotes))
+        self.assertTrue(all(q.source.creator == "Henry David Thoreau" for q in quotes))
 
     def test_filter_by_book(self):
-        quotes = filter_quotes_for_today(self.user, book_title="Dune")
+        quotes = filter_quotes_for_today(self.user, source_title="Dune")
         self.assertEqual(quotes.count(), 3)
 
     def test_filter_by_author_and_book(self):
-        quotes = filter_quotes_for_today(self.user, author="Henry David Thoreau", book_title="Walden")
+        quotes = filter_quotes_for_today(self.user, creator="Henry David Thoreau", source_title="Walden")
         self.assertEqual(quotes.count(), 4)
 
     def test_partial_value_falls_back_to_substring_match(self):
-        quotes = filter_quotes_for_today(self.user, author="thoreau")
+        quotes = filter_quotes_for_today(self.user, creator="thoreau")
         self.assertEqual(quotes.count(), 6)
 
     def test_exact_match_wins_over_substring_match(self):
-        Book.objects.create(title="Dune Messiah", author="Frank Herbert")
-        messiah = Book.objects.get(title="Dune Messiah")
-        Quote.objects.create(user=self.user, book=messiah, quote="Messiah 0")
-        quotes = filter_quotes_for_today(self.user, book_title="dune")
+        Source.objects.create(title="Dune Messiah", creator="Frank Herbert")
+        messiah = Source.objects.get(title="Dune Messiah")
+        Quote.objects.create(user=self.user, source=messiah, quote="Messiah 0")
+        quotes = filter_quotes_for_today(self.user, source_title="dune")
         self.assertEqual(quotes.count(), 3)
 
     def test_no_match_returns_empty(self):
-        self.assertEqual(filter_quotes_for_today(self.user, author="Nobody Known").count(), 0)
+        self.assertEqual(filter_quotes_for_today(self.user, creator="Nobody Known").count(), 0)
 
 
 class PickQuotesTest(TodayTestMixin, TestCase):
@@ -144,7 +144,7 @@ class GetTodaysQuotesTest(TodayTestMixin, TestCase):
         preference = update_today_preference(self.user, 2, "Frank Herbert", "")
         quotes = get_todays_quotes(self.user, preference)
         self.assertEqual(len(quotes), 2)
-        self.assertTrue(all(q.book == self.dune for q in quotes))
+        self.assertTrue(all(q.source == self.dune for q in quotes))
 
     def test_stamps_last_shown_at_on_picked_quotes(self):
         now = timezone.now()
@@ -175,7 +175,7 @@ class GetTodaysQuotesTest(TodayTestMixin, TestCase):
         preference = update_today_preference(self.user, 1, "", "Dune")
         quotes = get_todays_quotes(self.user, preference, now=now)
         self.assertEqual(len(quotes), 1)
-        self.assertEqual(quotes[0].book, self.dune)
+        self.assertEqual(quotes[0].source, self.dune)
 
     def test_tops_up_when_a_selected_quote_is_deleted(self):
         now = timezone.now()
@@ -203,8 +203,8 @@ class UpdateTodayPreferenceTest(TodayTestMixin, TestCase):
     def test_any_style_values_are_stored_as_blank(self):
         preference = update_today_preference(self.user, 4, " ANY ", "all")
         self.assertEqual(preference.quote_count, 4)
-        self.assertEqual(preference.author, "")
-        self.assertEqual(preference.book_title, "")
+        self.assertEqual(preference.creator, "")
+        self.assertEqual(preference.source_title, "")
 
     def test_rejects_out_of_range_count(self):
         with self.assertRaises(ValidationError):
@@ -221,28 +221,28 @@ class UpdateTodayPreferenceTest(TodayTestMixin, TestCase):
 class SuggestTodayValuesTest(TodayTestMixin, TestCase):
     def test_authors_only_from_users_books(self):
         self.assertEqual(
-            suggest_today_values(self.user, "author"),
+            suggest_today_values(self.user, "creator"),
             ["Frank Herbert", "Henry David Thoreau"],
         )
 
     def test_author_query_filters(self):
-        self.assertEqual(suggest_today_values(self.user, "author", query="thor"), ["Henry David Thoreau"])
+        self.assertEqual(suggest_today_values(self.user, "creator", query="thor"), ["Henry David Thoreau"])
 
     def test_books_narrowed_by_chosen_author(self):
         self.assertEqual(
-            suggest_today_values(self.user, "book", author="Henry David Thoreau"),
+            suggest_today_values(self.user, "source", creator="Henry David Thoreau"),
             ["Civil Disobedience", "Walden"],
         )
-        self.assertEqual(suggest_today_values(self.user, "book", author="any"), ["Civil Disobedience", "Dune", "Walden"])
+        self.assertEqual(suggest_today_values(self.user, "source", creator="any"), ["Civil Disobedience", "Dune", "Walden"])
 
     def test_authors_narrowed_by_chosen_book(self):
-        self.assertEqual(suggest_today_values(self.user, "author", book_title="Dune"), ["Frank Herbert"])
+        self.assertEqual(suggest_today_values(self.user, "creator", source_title="Dune"), ["Frank Herbert"])
 
     def test_soft_deleted_quotes_do_not_surface_books(self):
         for quote in self.dune_quotes:
             quote.deleted_at = timezone.now()
             quote.save()
-        self.assertNotIn("Dune", suggest_today_values(self.user, "book"))
+        self.assertNotIn("Dune", suggest_today_values(self.user, "source"))
 
     def test_unknown_field_raises(self):
         with self.assertRaises(ValueError):
@@ -311,17 +311,17 @@ class TodayPreferenceViewTest(TodayTestMixin, TestCase):
         assert self.client.login(username="reader", password="pw")
         resp = self.client.post(
             reverse("quotes:today_preferences"),
-            {"quote_count": "5", "author": "Frank Herbert", "book": "any"},
+            {"quote_count": "5", "creator": "Frank Herbert", "source": "any"},
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(
             resp.json(),
-            {"success": True, "quote_count": 5, "author": "Frank Herbert", "book": ""},
+            {"success": True, "quote_count": 5, "creator": "Frank Herbert", "source": ""},
         )
         preference = TodayPreference.objects.get(user=self.user)
         self.assertEqual(preference.quote_count, 5)
-        self.assertEqual(preference.author, "Frank Herbert")
-        self.assertEqual(preference.book_title, "")
+        self.assertEqual(preference.creator, "Frank Herbert")
+        self.assertEqual(preference.source_title, "")
 
     def test_rejects_non_numeric_count(self):
         assert self.client.login(username="reader", password="pw")
@@ -343,7 +343,7 @@ class TodayPreferenceViewTest(TodayTestMixin, TestCase):
 class TodaySuggestViewTest(TodayTestMixin, TestCase):
     def test_author_suggestions(self):
         assert self.client.login(username="reader", password="pw")
-        resp = self.client.get(reverse("quotes:today_suggest"), {"field": "author", "q": "her"})
+        resp = self.client.get(reverse("quotes:today_suggest"), {"field": "creator", "q": "her"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"suggestions": ["Frank Herbert"]})
 
@@ -351,13 +351,13 @@ class TodaySuggestViewTest(TodayTestMixin, TestCase):
         assert self.client.login(username="reader", password="pw")
         resp = self.client.get(
             reverse("quotes:today_suggest"),
-            {"field": "book", "q": "", "author": "Henry David Thoreau"},
+            {"field": "source", "q": "", "creator": "Henry David Thoreau"},
         )
         self.assertEqual(resp.json(), {"suggestions": ["Civil Disobedience", "Walden"]})
 
     def test_never_suggests_other_users_books(self):
         assert self.client.login(username="reader", password="pw")
-        resp = self.client.get(reverse("quotes:today_suggest"), {"field": "book", "q": "secret"})
+        resp = self.client.get(reverse("quotes:today_suggest"), {"field": "source", "q": "secret"})
         self.assertEqual(resp.json(), {"suggestions": []})
 
     def test_invalid_field(self):

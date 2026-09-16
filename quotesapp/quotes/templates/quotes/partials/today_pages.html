@@ -1,15 +1,15 @@
 {% for quote in quotes %}
 <article class="quote-page reading{% if forloop.first %} turn-in{% endif %}" data-page="{{ forloop.counter0 }}"{% if not forloop.first %} hidden{% endif %}>
-    <div class="folio">{% if quote.page_number %}p. {{ quote.page_number }}{% endif %}</div>
+    <div class="folio">{{ quote.margin_label }}</div>
     <div>
-        <blockquote class="q{% if quote.quote|length > 120 %} long{% endif %}">{{ quote.quote }}</blockquote>
+        <blockquote class="q{% if quote.is_long %} long{% endif %}">{{ quote.quote }}</blockquote>
         <div class="attr">
-            <span class="title">{{ quote.book.title }}</span>
-            {% if quote.book.author %}<span class="author">{{ quote.book.author }}</span>{% endif %}
+            <span class="title">{{ quote.source.title }}</span>
+            {% if quote.source.creator %}<span class="creator">{{ quote.source.creator }}</span>{% endif %}
         </div>
         <div class="qactions">
             <button type="button" data-copy="{{ quote.id }}">copy</button>
-            <a href="{% url 'quotes:shelf' %}?book={{ quote.book_id }}#q{{ quote.id }}">open in shelf</a>
+            <a href="{% url 'quotes:shelf' %}?source={{ quote.source_id }}#q{{ quote.id }}">open in shelf</a>
             <a href="{% url 'quotes:quote_edit' quote.id %}">edit</a>
         </div>
     </div>
@@ -17,7 +17,7 @@
 {% empty %}
 <div class="empty-state">
     <p>No passages match these criteria.</p>
-    <p class="hint">Pick another author or book above, or clear the filter.</p>
+    <p class="hint">Pick another author or source above, or clear the filter.</p>
 </div>
 {% endfor %}
 

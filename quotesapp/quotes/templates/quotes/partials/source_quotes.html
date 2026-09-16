@@ -1,0 +1,17 @@
+<div class="panel-head">
+    <h2>{{ source.title }}</h2>
+    {% if source.creator %}<div class="by">{{ source.creator }}</div>{% endif %}
+    <div class="meta">{% if source.marker %}{{ source.kind_spec.label }} · {% endif %}{% if source.collection %}{{ source.collection }} · {% endif %}{{ quotes|length }} passage{{ quotes|length|pluralize }}</div>
+</div>
+
+<ol class="passages">
+    {% for quote in quotes %}
+    <li id="q{{ quote.id }}">
+        <span class="pg">{{ quote.location }}</span>
+        <div>
+            <p>{{ quote.quote }}</p>
+            {% include 'quotes/partials/passage_actions.html' %}
+        </div>
+    </li>
+    {% endfor %}
+</ol>

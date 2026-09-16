@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views import View
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, TemplateView
-from .models import Quote, Book, User, TodayPreference
+from .models import Quote, Source, User, TodayPreference
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -18,16 +18,18 @@ import re
 import csv
 import io
 from .services import (
-    books_on_shelf,
     create_quote,
     filter_quotes_for_today,
+    parse_attribution,
     get_today_preference,
     get_todays_quotes,
     search_passages,
+    sources_on_shelf,
     suggest_today_values,
     update_today_preference,
 )
 from .ocr_service import OCRService
+from .source_kinds import get_kind, kinds_context
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +72,13 @@ class QuoteCreateViewCustomForm(LoginRequiredMixin, CreateView):
         # Automatically assign the logged-in user
         form.instance.user = self.request.user
         
-        book = form.cleaned_data['book']
+        source = form.cleaned_data['source']
         title = form.cleaned_data['title']
-        author = form.cleaned_data['author']
+        creator = form.cleaned_data['creator']
         quote = form.cleaned_data['quote']
         page_number = form.cleaned_data['page_number']
 
-        result = create_quote(quote, book, title, author, page_number, self.request.user)
+        result = create_quote(quote, source, title, creator, page_number, self.request.user)
         if result.status == "form_error":
             form.add_error(None, result.error_message)
             return self.form_invalid(form)
@@ -98,23 +100,23 @@ class QuoteUpdateView(LoginRequiredMixin, UserQuotesQuerySetMixin, UpdateView):
         # Keep the original user (don't allow changing user on update)
         # form.instance.user is already set from the existing quote
         
-        book = form.cleaned_data['book']
+        source = form.cleaned_data['source']
         title = form.cleaned_data['title']
-        author = form.cleaned_data['author']
+        creator = form.cleaned_data['creator']
 
-        if not book:
-            if not (title and author):
+        if not source:
+            if not (title and creator):
                 form.add_error(None, "Please select a book or enter both a title and author.")
                 return self.form_invalid(form)
         else:
-            if title or author:
+            if title or creator:
                 form.add_error(None, "You can only EITHER: 1) select a book OR 2) enter both a title and author.")
                 return self.form_invalid(form)
         
-        if not book and title and author:
-            # Create new book if none selected but title/author provided
-            book = Book.objects.create(title=title, author=author)
-            form.instance.book = book
+        if not source and title and creator:
+            # Create a new source if none selected but title/creator provided
+            source = Source.objects.create(title=title, creator=creator)
+            form.instance.source = source
 
         logger.info(
             "Quote updated",
@@ -150,7 +152,7 @@ class QuoteSoftDeleteView(LoginRequiredMixin, View):
 class TodayView(LoginRequiredMixin, TemplateView):
     """
     Show today's quotes - the same quotes throughout the day. How many, and
-    from which author/book, is driven by the user's TodayPreference.
+    from which creator/source, is driven by the user's TodayPreference.
     """
     template_name = 'quotes/today.html'
     pages_template_name = 'quotes/partials/today_pages.html'
@@ -169,9 +171,9 @@ class TodayView(LoginRequiredMixin, TemplateView):
 
         context['quotes'] = get_todays_quotes(user, preference)
         context['total_quotes'] = Quote.objects.filter(user=user).count()
-        context['matching_quotes'] = filter_quotes_for_today(user, preference.author, preference.book_title).count()
+        context['matching_quotes'] = filter_quotes_for_today(user, preference.creator, preference.source_title).count()
         context['preference'] = preference
-        context['is_filtered'] = bool(preference.author or preference.book_title)
+        context['is_filtered'] = bool(preference.creator or preference.source_title)
         context['min_quote_count'] = TodayPreference.MIN_QUOTE_COUNT
         context['max_quote_count'] = TodayPreference.MAX_QUOTE_COUNT
         context['default_quote_count'] = TodayPreference.DEFAULT_QUOTE_COUNT
@@ -193,8 +195,8 @@ class TodayPreferenceView(LoginRequiredMixin, View):
             preference = update_today_preference(
                 request.user,
                 quote_count=quote_count,
-                author=request.POST.get('author', ''),
-                book_title=request.POST.get('book', ''),
+                creator=request.POST.get('creator', ''),
+                source_title=request.POST.get('source', ''),
             )
         except ValidationError as e:
             messages = [msg for msgs in e.message_dict.values() for msg in msgs]
@@ -203,25 +205,25 @@ class TodayPreferenceView(LoginRequiredMixin, View):
         return JsonResponse({
             'success': True,
             'quote_count': preference.quote_count,
-            'author': preference.author,
-            'book': preference.book_title,
+            'creator': preference.creator,
+            'source': preference.source_title,
         })
 
 
 class TodaySuggestView(LoginRequiredMixin, View):
-    """Autocomplete for the author / book blanks on the Today screen."""
+    """Autocomplete for the creator / source blanks on the Today screen."""
 
     def get(self, request):
         field = request.GET.get('field', '')
-        if field not in ('author', 'book'):
-            return JsonResponse({'error': 'field must be "author" or "book"'}, status=400)
+        if field not in ('creator', 'source'):
+            return JsonResponse({'error': 'field must be "creator" or "source"'}, status=400)
 
         suggestions = suggest_today_values(
             request.user,
             field=field,
             query=request.GET.get('q', ''),
-            author=request.GET.get('author', ''),
-            book_title=request.GET.get('book', ''),
+            creator=request.GET.get('creator', ''),
+            source_title=request.GET.get('source', ''),
         )
         return JsonResponse({'suggestions': suggestions})
 
@@ -229,6 +231,9 @@ class TodaySuggestView(LoginRequiredMixin, View):
 class CaptureView(LoginRequiredMixin, TemplateView):
     """Minimalist quote capture with inline attribution parsing."""
     template_name = 'quotes/capture.html'
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs) | {'source_kinds': kinds_context()}
     
     def post(self, request):
         content = request.POST.get('content', '').strip()
@@ -253,44 +258,35 @@ class CaptureView(LoginRequiredMixin, TemplateView):
         if not quote_text:
             return JsonResponse({'error': 'Quote text cannot be empty'}, status=400)
         
-        # Parse attribution: "— book p. 123" or "— book" or "— book | author"
-        book_title = None
-        author = None
-        page_number = None
-        
-        if attribution_line:
-            # Remove leading dashes
-            attr = attribution_line.lstrip('—-').strip()
-            
-            # Check for page number pattern: "p. 123" or "p.123" or "page 123"
-            page_match = re.search(r'\b(?:p\.?|page)\s*(\d+)', attr, re.IGNORECASE)
-            if page_match:
-                page_number = int(page_match.group(1))
-                # Remove page number from attribution
-                attr = re.sub(r'\s*\b(?:p\.?|page)\s*\d+', '', attr, flags=re.IGNORECASE).strip()
-            
-            # Check for author pattern: "book | author"
-            if '|' in attr:
-                parts = attr.split('|')
-                book_title = parts[0].strip()
-                author = parts[1].strip() if len(parts) > 1 else None
-            else:
-                book_title = attr
-        
-        # Match an existing book by title; otherwise create one. create_quote
-        # takes either an existing book or a new title + author, never both.
+        kind = get_kind(request.POST.get('kind')).value
+        attribution = parse_attribution(attribution_line, kind) if attribution_line else {}
+        source_title = attribution.get('title') or None
+        creator = attribution.get('creator') or None
+
+        # Match an existing source of this kind by title; otherwise create one.
+        # create_quote takes either an existing source or a new title +
+        # creator, never both.
         try:
-            book = Book.objects.filter(title__iexact=book_title).first() if book_title else None
-            if book_title and not book and not author:
-                book = Book.objects.create(title=book_title, author='')
+            source = (
+                Source.objects.filter(title__iexact=source_title, kind=kind).first()
+                if source_title else None
+            )
+            if source_title and not source and not creator:
+                source = Source.objects.create(
+                    title=source_title, creator='', kind=kind,
+                    collection=attribution.get('collection', ''),
+                )
 
             result = create_quote(
                 quote_text,
-                book,
-                None if book else book_title,
-                None if book else author,
-                page_number,
+                source,
+                None if source else source_title,
+                None if source else creator,
+                attribution.get('page_number'),
                 request.user,
+                kind=kind,
+                timestamp_seconds=attribution.get('timestamp_seconds'),
+                collection=attribution.get('collection', ''),
             )
         except Exception as e:
             logger.error(f"Error creating quote: {e}")
@@ -302,13 +298,15 @@ class CaptureView(LoginRequiredMixin, TemplateView):
         return JsonResponse({
             'success': True,
             'quote_id': result.quote.id,
-            'book_title': result.quote.book.title,
+            'source_title': result.quote.source.title,
+            'kind': result.quote.source.kind,
+            'location': result.quote.location_label,
             'message': 'Quote saved' if result.status == "success" else 'Quote already exists',
         })
 
 
 class ShelfView(LoginRequiredMixin, TemplateView):
-    """Visual bookshelf showing all books as colored spines."""
+    """Visual bookshelf showing every source as a colored spine."""
     template_name = 'quotes/shelf.html'
     results_template_name = 'quotes/partials/passage_results.html'
     spine_colors = ['spine-color-1', 'spine-color-2', 'spine-color-3',
@@ -329,90 +327,98 @@ class ShelfView(LoginRequiredMixin, TemplateView):
             results = list(search_passages(user, query))
             context['query'] = query
             context['results'] = results
-            context['matching_book_ids'] = sorted({q.book_id for q in results})
+            context['matching_source_ids'] = sorted({q.source_id for q in results})
 
         if self.request.GET.get('partial') == 'results':
             return context
 
-        books = list(books_on_shelf(user))
-        max_count = max((b.quote_count for b in books), default=1)
-        context['books'] = [
+        sources = list(sources_on_shelf(user))
+        max_count = max((s.quote_count for s in sources), default=1)
+        context['sources'] = [
             {
-                'book': book,
+                'source': source,
                 'color': self.spine_colors[i % len(self.spine_colors)],
-                # Square-root scale relative to the fullest book, so a few very
-                # large books don't flatten everyone else to the same height.
-                'height': int(140 + 180 * (book.quote_count / max_count) ** 0.5),
+                # Square-root scale relative to the fullest source, so a few very
+                # large ones don't flatten everyone else to the same height.
+                'height': int(140 + 180 * (source.quote_count / max_count) ** 0.5),
             }
-            for i, book in enumerate(books)
+            for i, source in enumerate(sources)
         ]
-        context['total_books'] = len(books)
-        context['total_passages'] = sum(b.quote_count for b in books)
+        context['total_sources'] = len(sources)
+        context['total_passages'] = sum(s.quote_count for s in sources)
 
         selected = None
-        requested = self.request.GET.get('book', '')
+        requested = self.request.GET.get('source', '')
         if requested.isdigit():
-            selected = next((b for b in books if b.id == int(requested)), None)
-        if selected is None and books:
-            selected = books[0]
-        context['selected_book'] = selected
+            selected = next((s for s in sources if s.id == int(requested)), None)
+        if selected is None and sources:
+            selected = sources[0]
+        context['selected_source'] = selected
         if selected:
             context['selected_quotes'] = self._quotes_for(selected)
 
         return context
 
-    def _quotes_for(self, book):
-        return Quote.objects.filter(book=book, user=self.request.user).order_by('page_number', 'id')
+    def _quotes_for(self, source):
+        return quotes_in_source(source, self.request.user)
 
 
-class BookQuotesView(LoginRequiredMixin, TemplateView):
-    """Fragment: the passages panel for one book on the shelf."""
-    template_name = 'quotes/partials/book_quotes.html'
+def quotes_in_source(source, user):
+    """A user's passages from one source, in reading order."""
+    return Quote.objects.filter(source=source, user=user).order_by('page_number', 'timestamp_seconds', 'id')
+
+
+class SourceQuotesView(LoginRequiredMixin, TemplateView):
+    """Fragment: the passages panel for one source on the shelf."""
+    template_name = 'quotes/partials/source_quotes.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        book = get_object_or_404(Book, pk=self.kwargs.get('pk'))
-        context['book'] = book
-        context['quotes'] = Quote.objects.filter(book=book, user=self.request.user).order_by('page_number', 'id')
+        source = get_object_or_404(Source, pk=self.kwargs.get('pk'))
+        context['source'] = source
+        context['quotes'] = quotes_in_source(source, self.request.user)
         return context
 
 
 class SearchView(LoginRequiredMixin, View):
-    """JSON search across the user's passages, books and authors for the search palette."""
+    """JSON search across the user's passages, sources and creators for the search palette."""
 
     passage_limit = 8
-    book_limit = 5
+    source_limit = 5
 
     def get(self, request):
         query = request.GET.get('q', '').strip()
         if len(query) < 2:
-            return JsonResponse({'passages': [], 'books': []})
+            return JsonResponse({'passages': [], 'sources': []})
 
         passages = search_passages(request.user, query)[:self.passage_limit]
-        books = books_on_shelf(request.user).filter(
-            Q(title__icontains=query) | Q(author__icontains=query)
-        )[:self.book_limit]
+        sources = sources_on_shelf(request.user).filter(
+            Q(title__icontains=query) | Q(creator__icontains=query)
+        )[:self.source_limit]
 
         return JsonResponse({
             'passages': [
                 {
                     'id': quote.id,
                     'text': quote.quote[:240],
-                    'book': quote.book.title,
-                    'book_id': quote.book_id,
-                    'page': quote.page_number,
+                    'source': quote.source.title,
+                    'source_id': quote.source_id,
+                    'location': quote.location_label,
                 }
                 for quote in passages
             ],
-            'books': [
-                {'id': book.id, 'title': book.title, 'author': book.author, 'count': book.quote_count}
-                for book in books
+            'sources': [
+                {
+                    'id': source.id, 'title': source.title, 'creator': source.creator,
+                    'count': source.quote_count, 'marker': source.marker,
+                }
+                for source in sources
             ],
         })
 
 
-class BookSuggestView(LoginRequiredMixin, View):
-    """HTMX endpoint: suggest books as user types."""
+class SourceSuggestView(LoginRequiredMixin, View):
+    """API endpoint: suggest sources as user types."""
     
     def get(self, request):
         query = request.GET.get('q', '').strip()
@@ -420,19 +426,25 @@ class BookSuggestView(LoginRequiredMixin, View):
         if not query or len(query) < 2:
             return JsonResponse({'suggestions': []})
         
-        # Get books that have quotes from this user
-        books = Book.objects.filter(
+        # Get sources that have quotes from this user
+        sources = Source.objects.filter(
             quote__user=request.user,
             title__icontains=query
         ).distinct()[:5]
         
-        suggestions = [{'title': book.title, 'author': book.author} for book in books]
+        suggestions = [
+            {
+                'title': source.title, 'creator': source.creator,
+                'kind': source.kind, 'collection': source.collection,
+            }
+            for source in sources
+        ]
         
         return JsonResponse({'suggestions': suggestions})
 
 
-class AuthorSuggestView(LoginRequiredMixin, View):
-    """API endpoint: suggest authors as user types."""
+class CreatorSuggestView(LoginRequiredMixin, View):
+    """API endpoint: suggest creators as user types."""
     
     def get(self, request):
         query = request.GET.get('q', '').strip()
@@ -440,13 +452,13 @@ class AuthorSuggestView(LoginRequiredMixin, View):
         if not query or len(query) < 2:
             return JsonResponse({'suggestions': []})
         
-        # Get unique authors from books that have quotes from this user
-        authors = Book.objects.filter(
+        # Get unique creators from sources that have quotes from this user
+        creators = Source.objects.filter(
             quote__user=request.user,
-            author__icontains=query
-        ).values_list('author', flat=True).distinct()[:5]
+            creator__icontains=query
+        ).values_list('creator', flat=True).distinct()[:5]
         
-        suggestions = [{'author': author} for author in authors if author]
+        suggestions = [{'creator': creator} for creator in creators if creator]
         
         return JsonResponse({'suggestions': suggestions})
 
@@ -511,26 +523,26 @@ class BulkImportView(LoginRequiredMixin, TemplateView):
         if not quote_text or not full_title:
             return 'skipped'
         
-        # Clean book title and author
-        book_title = self._clean_book_title(full_title)
-        author = self._clean_author_name(author_str)
+        # Clean the Readwise book title and author
+        title = self._clean_book_title(full_title)
+        creator = self._clean_author_name(author_str)
         
-        # Get or create book
+        # Get or create the source
         with transaction.atomic():
-            book, _ = Book.objects.get_or_create(
-                title=book_title,
-                author=author,
-                defaults={'title': book_title, 'author': author}
+            source, _ = Source.objects.get_or_create(
+                title=title,
+                creator=creator,
+                defaults={'title': title, 'creator': creator}
             )
             
             # Check if quote already exists
-            if Quote.objects.filter(quote=quote_text, book=book, user=user).exists():
+            if Quote.objects.filter(quote=quote_text, source=source, user=user).exists():
                 return 'skipped'
             
             # Create quote
             Quote.objects.create(
                 quote=quote_text,
-                book=book,
+                source=source,
                 user=user,
                 page_number=None
             )
@@ -581,6 +593,9 @@ class RegisterView(CreateView):
 class ImageUploadView(LoginRequiredMixin, TemplateView):
     """Upload image and extract text using OCR."""
     template_name = 'quotes/image_upload.html'
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs) | {'source_kinds': kinds_context()}
     
     def post(self, request):
         if 'image' not in request.FILES:
@@ -626,6 +641,7 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
             return JsonResponse({
                 'success': True,
                 'text': cleaned_text,
+                'lines': OCRService.preprocess_extracted_text(result.lines),
                 'confidence': round(result.confidence, 1),
                 'low_confidence': low_confidence,
                 'message': 'Text extracted successfully'
@@ -670,12 +686,12 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
 # class QuoteCreateViewBasic(CreateView):
 #     model = Quotes
 #     template_name = 'quotes/create_quote.html'
-#     fields = ['quote', 'page_number', 'book']
+#     fields = ['quote', 'page_number', 'source']
 
 #     def form_valid(self, form):
-#         # book = form.cleaned_data['book']
+#         # source = form.cleaned_data['source']
 #         page_number = form.cleaned_data['page_number']
 #         quote = form.cleaned_data['quote']
 
-#         print(f"book: none, page_number: {page_number}, quote: {quote}")
+#         print(f"source: none, page_number: {page_number}, quote: {quote}")
 #         return HttpResponse("Quote created successfully")

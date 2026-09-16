@@ -25,31 +25,31 @@
             </span>
             <span id="criteria-count-label">quote{{ preference.quote_count|pluralize }}</span> by
             <span class="blank">
-                <input id="criteria-author"
-                       name="author"
+                <input id="criteria-creator"
+                       name="creator"
                        type="text"
                        placeholder="any"
-                       value="{{ preference.author }}"
+                       value="{{ preference.creator }}"
                        maxlength="255"
                        spellcheck="false"
                        aria-label="Author"
                        aria-autocomplete="list">
                 <ul class="suggestions" role="listbox" hidden></ul>
             </span>
-            author in
+            author from
             <span class="blank">
-                <input id="criteria-book"
-                       name="book"
+                <input id="criteria-source"
+                       name="source"
                        type="text"
                        placeholder="any"
-                       value="{{ preference.book_title }}"
+                       value="{{ preference.source_title }}"
                        maxlength="255"
                        spellcheck="false"
-                       aria-label="Book"
+                       aria-label="Source"
                        aria-autocomplete="list">
                 <ul class="suggestions" role="listbox" hidden></ul>
             </span>
-            book.
+            source.
             <button type="button" id="clear-filter" class="clear-filter"{% if not is_filtered %} hidden{% endif %}>clear ×</button>
         </form>
         <p id="criteria-error" class="criteria-error" role="alert" hidden></p>
@@ -122,13 +122,13 @@
         if (Math.abs(diff) > 50) showPage(currentPage + (diff > 0 ? 1 : -1));
     });
 
-    // ---- Criteria sentence: "I want to see __ quotes by __ author in __ book."
+    // ---- Criteria sentence: "I want to see __ quotes by __ author from __ source."
     (function () {
         const root = document.getElementById('criteria');
         const form = document.getElementById('criteria-form');
         const countInput = document.getElementById('criteria-count');
-        const authorInput = document.getElementById('criteria-author');
-        const bookInput = document.getElementById('criteria-book');
+        const creatorInput = document.getElementById('criteria-creator');
+        const sourceInput = document.getElementById('criteria-source');
         const countLabel = document.getElementById('criteria-count-label');
         const clearButton = document.getElementById('clear-filter');
         const errorEl = document.getElementById('criteria-error');
@@ -146,22 +146,22 @@
             measure.textContent = input.value || input.placeholder || '0';
             input.style.width = (measure.offsetWidth + 10) + 'px';
         }
-        const fitAll = () => [countInput, authorInput, bookInput].forEach(fit);
+        const fitAll = () => [countInput, creatorInput, sourceInput].forEach(fit);
 
         function values() {
             return {
                 quote_count: countInput.value.trim(),
-                author: authorInput.value.trim(),
-                book: bookInput.value.trim(),
+                creator: creatorInput.value.trim(),
+                source: sourceInput.value.trim(),
             };
         }
         let applied = JSON.stringify(values());
 
         function syncDecorations() {
             countLabel.textContent = countInput.value.trim() === '1' ? 'quote' : 'quotes';
-            authorInput.classList.toggle('is-set', !!authorInput.value.trim());
-            bookInput.classList.toggle('is-set', !!bookInput.value.trim());
-            clearButton.hidden = !(authorInput.value.trim() || bookInput.value.trim());
+            creatorInput.classList.toggle('is-set', !!creatorInput.value.trim());
+            sourceInput.classList.toggle('is-set', !!sourceInput.value.trim());
+            clearButton.hidden = !(creatorInput.value.trim() || sourceInput.value.trim());
         }
 
         function clampCount() {
@@ -219,8 +219,8 @@
         }
 
         clearButton.addEventListener('click', () => {
-            authorInput.value = '';
-            bookInput.value = '';
+            creatorInput.value = '';
+            sourceInput.value = '';
             fitAll();
             apply();
         });
@@ -327,8 +327,8 @@
             });
         }
 
-        setupAutocomplete(authorInput, 'author', bookInput, 'book');
-        setupAutocomplete(bookInput, 'book', authorInput, 'author');
+        setupAutocomplete(creatorInput, 'creator', sourceInput, 'source');
+        setupAutocomplete(sourceInput, 'source', creatorInput, 'creator');
 
         syncDecorations();
         fitAll();

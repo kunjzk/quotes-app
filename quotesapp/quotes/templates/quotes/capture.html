@@ -6,7 +6,7 @@
 <div class="capture">
     {% include 'quotes/partials/capture_modes.html' %}
 
-    <form id="capture-form" data-suggest-url="{% url 'quotes:book_suggest' %}" data-shelf-url="{% url 'quotes:shelf' %}">
+    <form id="capture-form" data-suggest-url="{% url 'quotes:source_suggest' %}" data-shelf-url="{% url 'quotes:shelf' %}">
         {% csrf_token %}
         <div class="sheet">
             <textarea id="quote-input" name="content" rows="6" placeholder="Paste or type a passage" aria-label="Passage" autofocus></textarea>
@@ -14,8 +14,14 @@
             <div class="attrline">
                 <span class="dash" aria-hidden="true">—</span>
                 <input id="attr-input" type="text" placeholder="book | author | p. 42" autocomplete="off" spellcheck="false"
-                       aria-label="Book, author and page" aria-autocomplete="list" aria-controls="book-pop">
-                <div class="book-pop" id="book-pop" role="listbox" hidden></div>
+                       aria-label="Book, author and page" aria-autocomplete="list" aria-controls="source-pop">
+                <div class="kind-switch" id="kind-switch" role="radiogroup" aria-label="Kind of source">
+                    {% for kind in source_kinds %}
+                    <button type="button" role="radio" data-kind="{{ kind.value }}"
+                            aria-checked="{% if forloop.first %}true{% else %}false{% endif %}">{{ kind.label }}</button>
+                    {% endfor %}
+                </div>
+                <div class="source-pop" id="source-pop" role="listbox" hidden></div>
             </div>
             <div class="parsed" id="parsed" aria-live="polite"></div>
         </div>
@@ -29,31 +35,63 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{{ source_kinds|json_script:"source-kinds" }}
 <script>
     (() => {
         const form = document.getElementById('capture-form');
         const textInput = document.getElementById('quote-input');
         const attrInput = document.getElementById('attr-input');
-        const pop = document.getElementById('book-pop');
+        const pop = document.getElementById('source-pop');
         const parsed = document.getElementById('parsed');
         const saveButton = document.getElementById('save-button');
         const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+        const KINDS = JSON.parse(document.getElementById('source-kinds').textContent);
+        const switcher = document.getElementById('kind-switch');
+        let kind = KINDS[0];
+
+        // Everything that differs between books and songs comes from the
+        // definitions the server rendered: labels, hints, how a position is
+        // written, and whether line breaks are kept.
+        function setKind(value, { fromUser = false } = {}) {
+            kind = KINDS.find((k) => k.value === value) || KINDS[0];
+            switcher.querySelectorAll('button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.kind === kind.value)));
+            attrInput.placeholder = kind.attribution_hint;
+            attrInput.setAttribute('aria-label', `${kind.title_label}, ${kind.creator_label.toLowerCase()} and ${kind.locator}`);
+            if (fromUser) {
+                suggestions = [];
+                loadSuggestions();
+            }
+            renderParsed();
+        }
+        switcher.addEventListener('click', (e) => {
+            const button = e.target.closest('button');
+            if (button) setKind(button.dataset.kind, { fromUser: true });
+        });
 
         if (/Mac|iPhone|iPad/.test(navigator.platform) === false) {
             saveButton.querySelector('kbd').textContent = 'Ctrl ↵';
         }
 
-        // Mirrors CaptureView's parser: "title | author | p. 42", every part but the title optional.
+        // Mirrors CaptureView's parser: "title | creator | p. 42" for a book,
+        // "title | creator | 2:31" for a song. Every part but the title is optional.
         function parseAttribution(value) {
             let rest = value.trim().replace(/^[—-]\s*/, '');
-            let page = null;
-            const pageMatch = rest.match(/\b(?:p\.?|page)\s*(\d+)/i);
-            if (pageMatch) {
-                page = pageMatch[1];
-                rest = rest.replace(/\s*\b(?:p\.?|page)\s*\d+/gi, '').trim();
+            let location = null;
+            if (kind.locator === 'timestamp') {
+                const match = rest.match(/(?<![\d:])(?:at\s+)?(\d{1,3}:[0-5]\d(?::[0-5]\d)?)(?![\d:])/i);
+                if (match) {
+                    location = match[1];
+                    rest = rest.replace(match[0], '').trim();
+                }
+            } else {
+                const match = rest.match(/\b(?:p\.?|page)\s*(\d+)/i);
+                if (match) {
+                    location = `p. ${match[1]}`;
+                    rest = rest.replace(/\s*\b(?:p\.?|page)\s*\d+/gi, '').trim();
+                }
             }
-            const [title = '', author = ''] = rest.split('|').map((part) => part.trim());
-            return { title, author, page };
+            const [title = '', creator = '', collection = ''] = rest.split('|').map((part) => part.trim());
+            return { title, creator, collection: kind.collection_label ? collection : '', location };
         }
 
         let suggestions = [];
@@ -62,21 +100,24 @@
         let debounce;
 
         function renderParsed() {
-            const { title, author, page } = parseAttribution(attrInput.value);
+            const { title, creator, collection, location } = parseAttribution(attrInput.value);
             if (!title) {
-                parsed.innerHTML = '<span>Book, then optionally author and page. Only the book is required.</span>';
+                const optional = [kind.creator_label, kind.collection_label, kind.locator].filter(Boolean).map((w) => w.toLowerCase());
+                parsed.innerHTML = `<span>${escapeHtml(kind.title_label)}, then optionally ${escapeHtml(optional.slice(0, -1).join(', '))} and ${escapeHtml(optional.at(-1))}. Only the ${escapeHtml(kind.label.toLowerCase())} is required.</span>`;
                 return;
             }
-            const known = suggestions.find((s) => s.title.toLowerCase() === title.toLowerCase());
+            const known = suggestions.find((s) => s.title.toLowerCase() === title.toLowerCase() && s.kind === kind.value);
             const bits = [];
             if (known) {
                 bits.push('<span class="dot"></span>', `<span>${escapeHtml(known.title)}</span>`);
-                if (known.author) bits.push('<span>·</span>', `<span>${escapeHtml(known.author)}</span>`);
+                if (known.creator) bits.push('<span>·</span>', `<span>${escapeHtml(known.creator)}</span>`);
             } else {
                 bits.push('<span class="new">New to your shelf</span>', `<span>${escapeHtml(title)}</span>`);
-                if (author) bits.push('<span>·</span>', `<span>${escapeHtml(author)}</span>`);
+                if (creator) bits.push('<span>·</span>', `<span>${escapeHtml(creator)}</span>`);
             }
-            if (page) bits.push('<span>·</span>', `<span>p. ${escapeHtml(page)}</span>`);
+            const album = collection || (known && known.collection) || '';
+            if (album) bits.push('<span>·</span>', `<span>${escapeHtml(album)}</span>`);
+            if (location) bits.push('<span>·</span>', `<span>${escapeHtml(location)}</span>`);
             parsed.innerHTML = bits.join('');
         }
 
@@ -87,14 +128,14 @@
 
         function renderPop() {
             const { title } = parseAttribution(attrInput.value);
-            const options = suggestions.filter((s) => s.title.toLowerCase() !== title.toLowerCase());
+            const options = suggestions.filter((s) => s.title.toLowerCase() !== title.toLowerCase() || s.kind !== kind.value);
             if (!title || !options.length || document.activeElement !== attrInput) {
                 closePop();
                 return;
             }
             pop.innerHTML = options.map((s, i) => `
-                <button type="button" role="option" data-title="${escapeHtml(s.title)}" class="${i === highlighted ? 'hi' : ''}">
-                    <span>${escapeHtml(s.title)}</span><span>${escapeHtml(s.author || 'Unknown author')}</span>
+                <button type="button" role="option" data-title="${escapeHtml(s.title)}" data-kind="${escapeHtml(s.kind)}" class="${i === highlighted ? 'hi' : ''}">
+                    <span>${escapeHtml(s.title)}</span><span>${escapeHtml(s.creator || `Unknown ${(KINDS.find((k) => k.value === s.kind) || kind).creator_label.toLowerCase()}`)}</span>
                 </button>`).join('');
             pop.hidden = false;
         }
@@ -121,9 +162,11 @@
             renderParsed();
         }
 
-        function chooseBook(title) {
-            const { page } = parseAttribution(attrInput.value);
-            attrInput.value = title + (page ? ` p. ${page}` : '');
+        function chooseSource(title, sourceKind) {
+            const { creator, collection, location } = parseAttribution(attrInput.value);
+            if (sourceKind && sourceKind !== kind.value) setKind(sourceKind);
+            const rest = [creator, collection].filter(Boolean).map((part) => ` | ${part}`).join('');
+            attrInput.value = title + rest + (location ? ` ${location}` : '');
             closePop();
             renderParsed();
         }
@@ -141,14 +184,14 @@
             if (pop.hidden || !options.length) return;
             if (e.key === 'ArrowDown') { e.preventDefault(); highlighted = (highlighted + 1) % options.length; renderPop(); }
             else if (e.key === 'ArrowUp') { e.preventDefault(); highlighted = (highlighted - 1 + options.length) % options.length; renderPop(); }
-            else if (e.key === 'Enter' && highlighted >= 0 && !(e.metaKey || e.ctrlKey)) { e.preventDefault(); chooseBook(options[highlighted].dataset.title); }
+            else if (e.key === 'Enter' && highlighted >= 0 && !(e.metaKey || e.ctrlKey)) { e.preventDefault(); chooseSource(options[highlighted].dataset.title, options[highlighted].dataset.kind); }
             else if (e.key === 'Escape') { e.preventDefault(); closePop(); }
         });
         pop.addEventListener('mousedown', (e) => {
             const option = e.target.closest('button');
             if (!option) return;
             e.preventDefault();
-            chooseBook(option.dataset.title);
+            chooseSource(option.dataset.title, option.dataset.kind);
         });
 
         function clearForm() {
@@ -161,7 +204,7 @@
         }
         document.getElementById('clear-button').addEventListener('click', clearForm);
 
-        // A pasted passage that ends with "— book | author" fills in the attribution line.
+        // A pasted passage that ends with "— title | creator" fills in the attribution line.
         textInput.addEventListener('paste', () => setTimeout(() => {
             const lines = textInput.value.trimEnd().split('\n');
             const last = lines[lines.length - 1].trim();
@@ -176,21 +219,21 @@
             const text = textInput.value.trim();
             const { title } = parseAttribution(attrInput.value);
             if (!text) { toast('Add the passage text first', { error: true }); textInput.focus(); return; }
-            if (!title) { toast('Add a book on the attribution line', { error: true }); attrInput.focus(); return; }
+            if (!title) { toast(`Add a ${kind.label.toLowerCase()} on the attribution line`, { error: true }); attrInput.focus(); return; }
 
             saveButton.disabled = true;
             try {
                 const response = await fetch(window.location.pathname, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrfToken },
-                    body: new URLSearchParams({ content: `${text}\n— ${attrInput.value.trim()}` }),
+                    body: new URLSearchParams({ content: `${text}\n— ${attrInput.value.trim()}`, kind: kind.value }),
                 });
                 const data = await response.json();
                 if (!response.ok || !data.success) throw new Error(data.error || 'Could not save the passage. Try again.');
                 toast(data.message === 'Quote already exists'
-                    ? `Already on your shelf in ${data.book_title}`
-                    : `Saved to ${data.book_title}`);
-                // Keep the attribution so several passages from one book are quick to add.
+                    ? `Already on your shelf in ${data.source_title}`
+                    : `Saved to ${data.source_title}`);
+                // Keep the attribution so several passages from one source are quick to add.
                 textInput.value = '';
                 textInput.focus();
             } catch (err) {
@@ -205,8 +248,8 @@
             if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); save(); }
         }));
 
-        renderParsed();
-        if (location.hash === '#voice') document.getElementById('voice-button').focus();
+        setKind(KINDS[0].value);
+        if (window.location.hash === '#voice') document.getElementById('voice-button').focus();
     })();
 </script>
 
@@ -270,8 +313,11 @@
         toast('Transcribing…');
         try {
             const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+            // Whisper returns segments that break at pauses: for lyrics those
+            // are roughly lines, so keep them on separate lines.
+            const separator = document.querySelector('#kind-switch [aria-checked="true"]')?.dataset.kind === 'song' ? '\n' : ' ';
             let transcription = '';
-            for await (const { text } of whisper.transcribe(file)) transcription += text + ' ';
+            for await (const { text } of whisper.transcribe(file)) transcription += text + separator;
             const current = input.value.trim();
             input.value = current ? `${current}\n\n${transcription.trim()}` : transcription.trim();
             input.focus();

@@ -3,6 +3,7 @@
 {% block title %}Photo · Capture · ReadReadRead{% endblock %}
 
 {% block content %}
+{{ source_kinds|json_script:"source-kinds" }}
 <div class="capture capture-panel">
     {% include 'quotes/partials/capture_modes.html' %}
     <p class="lede">Photograph or upload a page. Select the passages you want from the extracted text.</p>
@@ -98,21 +99,33 @@
             
             <!-- Common Metadata Form -->
             <div class="mb-6 p-4 rounded-lg border" style="border-color: var(--teal); background-color: rgba(45, 106, 106, 0.05);">
-                <h4 class="font-semibold mb-3">Book Information</h4>
+                <div class="flex items-baseline justify-between gap-3 mb-3">
+                    <h4 class="font-semibold"><span id="kind-heading">Book</span> information</h4>
+                    <div class="kind-switch" id="kind-switch" role="radiogroup" aria-label="Kind of source">
+                        {% for kind in source_kinds %}
+                        <button type="button" role="radio" data-kind="{{ kind.value }}"
+                                aria-checked="{% if forloop.first %}true{% else %}false{% endif %}">{{ kind.label }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
                 <div class="space-y-3">
                     <div class="relative">
-                        <label for="book-title" class="block text-sm font-medium mb-1">Book Title</label>
-                        <input type="text" id="book-title" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter book title" autocomplete="off">
-                        <div id="book-title-suggestions" class="absolute z-10 w-full mt-1 hidden"></div>
+                        <label for="source-title" id="source-title-label" class="block text-sm font-medium mb-1">Book title</label>
+                        <input type="text" id="source-title" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter book title" autocomplete="off">
+                        <div id="source-title-suggestions" class="absolute z-10 w-full mt-1 hidden"></div>
                     </div>
                     <div class="relative">
-                        <label for="author" class="block text-sm font-medium mb-1">Author</label>
-                        <input type="text" id="author" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter author name" autocomplete="off">
-                        <div id="author-suggestions" class="absolute z-10 w-full mt-1 hidden"></div>
+                        <label for="creator" id="creator-label" class="block text-sm font-medium mb-1">Author</label>
+                        <input type="text" id="creator" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter author name" autocomplete="off">
+                        <div id="creator-suggestions" class="absolute z-10 w-full mt-1 hidden"></div>
+                    </div>
+                    <div id="collection-field" hidden>
+                        <label for="collection" id="collection-label" class="block text-sm font-medium mb-1">Album</label>
+                        <input type="text" id="collection" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="Enter album" autocomplete="off">
                     </div>
                     <div>
-                        <label for="page-number" class="block text-sm font-medium mb-1">Page Number (optional)</label>
-                        <input type="number" id="page-number" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="e.g., 42">
+                        <label for="location" id="location-label" class="block text-sm font-medium mb-1">Page number (optional)</label>
+                        <input type="number" id="location" class="w-full px-3 py-2 rounded border" style="border-color: var(--teal);" placeholder="e.g. 42">
                     </div>
                 </div>
             </div>
@@ -168,8 +181,48 @@
 
 <script>
 let selectedQuotes = [];
-let bookTitleTimeout = null;
-let authorTimeout = null;
+const KINDS = JSON.parse(document.getElementById('source-kinds').textContent);
+let kind = KINDS[0];
+// Both layouts of the last read, so switching kind doesn't read the photo again.
+let extracted = { text: '', lines: '' };
+
+// Labels, the position field and which layout of the text to show all come
+// from the kind definitions the server rendered.
+function setKind(value) {
+    kind = KINDS.find((k) => k.value === value) || KINDS[0];
+    document.querySelectorAll('#kind-switch button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.kind === kind.value)));
+    document.getElementById('kind-heading').textContent = kind.label;
+    document.getElementById('source-title-label').textContent = kind.title_label;
+    document.getElementById('source-title').placeholder = `Enter ${kind.title_label.toLowerCase()}`;
+    document.getElementById('creator-label').textContent = kind.creator_label;
+    document.getElementById('creator').placeholder = `Enter ${kind.creator_label.toLowerCase()} name`;
+    // Only kinds that group their sources show the field, e.g. a song's album.
+    document.getElementById('collection-field').hidden = !kind.collection_label;
+    if (kind.collection_label) {
+        document.getElementById('collection-label').textContent = kind.collection_label;
+        document.getElementById('collection').placeholder = `Enter ${kind.collection_label.toLowerCase()}`;
+    }
+    const location = document.getElementById('location');
+    document.getElementById('location-label').textContent = kind.locator_label;
+    location.type = kind.locator === 'page' ? 'number' : 'text';
+    location.placeholder = kind.locator_hint;
+    showExtractedText();
+}
+
+function showExtractedText() {
+    const text = kind.keeps_line_breaks ? (extracted.lines || extracted.text) : extracted.text;
+    document.getElementById('extracted-text').textContent = text;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('kind-switch').addEventListener('click', (e) => {
+        const button = e.target.closest('button');
+        if (button) setKind(button.dataset.kind);
+    });
+    setKind(KINDS[0].value);
+});
+let sourceTitleTimeout = null;
+let creatorTimeout = null;
 
 let currentFile = null;
 
@@ -219,7 +272,8 @@ function extractText() {
         document.getElementById('loading').classList.add('hidden');
         
         if (data.success) {
-            document.getElementById('extracted-text').textContent = data.text;
+            extracted = { text: data.text, lines: data.lines || data.text };
+            showExtractedText();
             const warning = document.getElementById('confidence-warning');
             if (data.low_confidence) {
                 document.getElementById('confidence-value').textContent = Math.round(data.confidence);
@@ -424,17 +478,18 @@ function updateQuotesList() {
 }
 
 async function saveAllQuotes() {
-    const bookTitle = document.getElementById('book-title').value.trim();
-    const author = document.getElementById('author').value.trim();
-    const pageNumber = document.getElementById('page-number').value.trim();
+    const sourceTitle = document.getElementById('source-title').value.trim();
+    const creator = document.getElementById('creator').value.trim();
+    const location = document.getElementById('location').value.trim();
+    const collection = kind.collection_label ? document.getElementById('collection').value.trim() : '';
     
     if (selectedQuotes.length === 0) {
         alert('Please select at least one quote');
         return;
     }
     
-    if (!bookTitle || !author) {
-        alert('Please enter both book title and author');
+    if (!sourceTitle || !creator) {
+        alert(`Please enter both ${kind.title_label.toLowerCase()} and ${kind.creator_label.toLowerCase()}`);
         return;
     }
     
@@ -451,13 +506,16 @@ async function saveAllQuotes() {
             formData.append('content', quote.text);
             formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
             
-            const attribution = `— ${bookTitle} | ${author}${pageNumber ? ' p. ' + pageNumber : ''}`;
+            const position = location ? (kind.locator === 'page' ? ` p. ${location}` : ` ${location}`) : '';
+            const album = collection ? ` | ${collection}` : '';
+            const attribution = `— ${sourceTitle} | ${creator}${album}${position}`;
             const fullContent = quote.text + '\n' + attribution;
             
             const response = await fetch('{% url "quotes:capture" %}', {
                 method: 'POST',
                 body: new URLSearchParams({
                     'content': fullContent,
+                    'kind': kind.value,
                     'csrfmiddlewaretoken': '{{ csrf_token }}'
                 }),
                 headers: {
@@ -488,101 +546,103 @@ async function saveAllQuotes() {
 }
 
 // Autocomplete functionality
-const bookTitleInput = document.getElementById('book-title');
-const authorInput = document.getElementById('author');
-const bookTitleSuggestions = document.getElementById('book-title-suggestions');
-const authorSuggestions = document.getElementById('author-suggestions');
+const sourceTitleInput = document.getElementById('source-title');
+const creatorInput = document.getElementById('creator');
+const sourceTitleSuggestions = document.getElementById('source-title-suggestions');
+const creatorSuggestions = document.getElementById('creator-suggestions');
 
-bookTitleInput.addEventListener('input', function(e) {
-    clearTimeout(bookTitleTimeout);
+sourceTitleInput.addEventListener('input', function(e) {
+    clearTimeout(sourceTitleTimeout);
     const query = e.target.value.trim();
     
     if (query.length < 2) {
-        bookTitleSuggestions.classList.add('hidden');
+        sourceTitleSuggestions.classList.add('hidden');
         return;
     }
     
-    bookTitleTimeout = setTimeout(() => {
-        fetchBookSuggestions(query);
+    sourceTitleTimeout = setTimeout(() => {
+        fetchSourceSuggestions(query);
     }, 300);
 });
 
-authorInput.addEventListener('input', function(e) {
-    clearTimeout(authorTimeout);
+creatorInput.addEventListener('input', function(e) {
+    clearTimeout(creatorTimeout);
     const query = e.target.value.trim();
     
     if (query.length < 2) {
-        authorSuggestions.classList.add('hidden');
+        creatorSuggestions.classList.add('hidden');
         return;
     }
     
-    authorTimeout = setTimeout(() => {
-        fetchAuthorSuggestions(query);
+    creatorTimeout = setTimeout(() => {
+        fetchCreatorSuggestions(query);
     }, 300);
 });
 
-async function fetchBookSuggestions(query) {
+async function fetchSourceSuggestions(query) {
     try {
-        const response = await fetch(`{% url "quotes:book_suggest" %}?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`{% url "quotes:source_suggest" %}?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         
         if (data.suggestions && data.suggestions.length > 0) {
-            displayBookSuggestions(data.suggestions);
+            displaySourceSuggestions(data.suggestions);
         } else {
-            bookTitleSuggestions.classList.add('hidden');
+            sourceTitleSuggestions.classList.add('hidden');
         }
     } catch (error) {
-        console.error('Error fetching book suggestions:', error);
+        console.error('Error fetching source suggestions:', error);
     }
 }
 
-async function fetchAuthorSuggestions(query) {
+async function fetchCreatorSuggestions(query) {
     try {
-        const response = await fetch(`{% url "quotes:author_suggest" %}?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`{% url "quotes:creator_suggest" %}?q=${encodeURIComponent(query)}`);
         const data = await response.json();
         
         if (data.suggestions && data.suggestions.length > 0) {
-            displayAuthorSuggestions(data.suggestions);
+            displayCreatorSuggestions(data.suggestions);
         } else {
-            authorSuggestions.classList.add('hidden');
+            creatorSuggestions.classList.add('hidden');
         }
     } catch (error) {
-        console.error('Error fetching author suggestions:', error);
+        console.error('Error fetching creator suggestions:', error);
     }
 }
 
-function displayBookSuggestions(suggestions) {
-    bookTitleSuggestions.innerHTML = '<div class="autocomplete-container">' +
+function displaySourceSuggestions(suggestions) {
+    sourceTitleSuggestions.innerHTML = '<div class="autocomplete-container">' +
         suggestions.map(s => `
-            <div class="autocomplete-item" onclick="selectBookSuggestion('${escapeHtml(s.title)}', '${escapeHtml(s.author)}')">
+            <div class="autocomplete-item" onclick="selectSourceSuggestion('${escapeHtml(s.title)}', '${escapeHtml(s.creator)}', '${escapeHtml(s.kind)}', '${escapeHtml(s.collection || '')}')">
                 <div class="font-semibold">${escapeHtml(s.title)}</div>
-                <div class="text-sm" style="color: var(--grey);">${escapeHtml(s.author)}</div>
+                <div class="text-sm" style="color: var(--grey);">${escapeHtml(s.creator)}</div>
             </div>
         `).join('') +
         '</div>';
-    bookTitleSuggestions.classList.remove('hidden');
+    sourceTitleSuggestions.classList.remove('hidden');
 }
 
-function displayAuthorSuggestions(suggestions) {
-    authorSuggestions.innerHTML = '<div class="autocomplete-container">' +
+function displayCreatorSuggestions(suggestions) {
+    creatorSuggestions.innerHTML = '<div class="autocomplete-container">' +
         suggestions.map(s => `
-            <div class="autocomplete-item" onclick="selectAuthorSuggestion('${escapeHtml(s.author)}')">
-                <div>${escapeHtml(s.author)}</div>
+            <div class="autocomplete-item" onclick="selectCreatorSuggestion('${escapeHtml(s.creator)}')">
+                <div>${escapeHtml(s.creator)}</div>
             </div>
         `).join('') +
         '</div>';
-    authorSuggestions.classList.remove('hidden');
+    creatorSuggestions.classList.remove('hidden');
 }
 
-function selectBookSuggestion(title, author) {
-    bookTitleInput.value = title;
-    authorInput.value = author;
-    bookTitleSuggestions.classList.add('hidden');
+function selectSourceSuggestion(title, creator, sourceKind, collection) {
+    if (sourceKind && sourceKind !== kind.value) setKind(sourceKind);
+    sourceTitleInput.value = title;
+    creatorInput.value = creator;
+    if (collection && kind.collection_label) document.getElementById('collection').value = collection;
+    sourceTitleSuggestions.classList.add('hidden');
 }
 
-function selectAuthorSuggestion(author) {
-    authorInput.value = author;
-    authorSuggestions.classList.add('hidden');
+function selectCreatorSuggestion(creator) {
+    creatorInput.value = creator;
+    creatorSuggestions.classList.add('hidden');
 }
 
 function escapeHtml(text) {
@@ -593,11 +653,11 @@ function escapeHtml(text) {
 
 // Hide suggestions when clicking outside
 document.addEventListener('click', function(e) {
-    if (!bookTitleInput.contains(e.target) && !bookTitleSuggestions.contains(e.target)) {
-        bookTitleSuggestions.classList.add('hidden');
+    if (!sourceTitleInput.contains(e.target) && !sourceTitleSuggestions.contains(e.target)) {
+        sourceTitleSuggestions.classList.add('hidden');
     }
-    if (!authorInput.contains(e.target) && !authorSuggestions.contains(e.target)) {
-        authorSuggestions.classList.add('hidden');
+    if (!creatorInput.contains(e.target) && !creatorSuggestions.contains(e.target)) {
+        creatorSuggestions.classList.add('hidden');
     }
 });
 </script>

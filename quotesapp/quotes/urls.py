@@ -14,9 +14,9 @@ urlpatterns = [
     path("import/", views.BulkImportView.as_view(), name="bulk_import"),
     
     # HTMX endpoints
-    path("api/book/<int:pk>/quotes/", views.BookQuotesView.as_view(), name="book_quotes"),
-    path("api/book/suggest/", views.BookSuggestView.as_view(), name="book_suggest"),
-    path("api/author/suggest/", views.AuthorSuggestView.as_view(), name="author_suggest"),
+    path("api/source/<int:pk>/quotes/", views.SourceQuotesView.as_view(), name="source_quotes"),
+    path("api/source/suggest/", views.SourceSuggestView.as_view(), name="source_suggest"),
+    path("api/creator/suggest/", views.CreatorSuggestView.as_view(), name="creator_suggest"),
     path("api/today/suggest/", views.TodaySuggestView.as_view(), name="today_suggest"),
     path("api/search/", views.SearchView.as_view(), name="search"),
     

@@ -755,6 +755,64 @@ mark { background: var(--teal-soft); color: inherit; padding: 0 0.08em; border-r
 .capture-panel h1 { margin: 0 0 6px; font-size: 26px; font-weight: 500; }
 .capture-panel .lede { margin: 0 0 28px; color: var(--graphite); }
 
+/* Picking passages out of the extracted text */
+
+/* The one place on the page meant to be selected by hand, so it says so:
+   a phone's press-and-hold has to reach it whatever an ancestor asks for. */
+.extract {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+.extract::selection { background: var(--teal); color: var(--paper); }
+.extract ::selection { background: var(--teal); color: var(--paper); }
+
+/* Touching anything drops a phone's selection, so the passage goes here the
+   moment it is made and the bar commits it, within thumb reach of the text
+   instead of past a scroll. */
+.selbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: min(92vw, 540px);
+  padding: 8px 8px 8px 18px;
+  border-radius: 999px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  box-shadow: var(--lift);
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 12px);
+  transition: opacity 0.18s, transform 0.18s, visibility 0.18s;
+}
+.selbar.show { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+.selbar .peek {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 15px;
+  font-style: italic;
+  color: var(--graphite);
+}
+.selbar button {
+  flex: none;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: var(--teal);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 /* ------------------------------------------------------- search palette */
 
 dialog.palette {

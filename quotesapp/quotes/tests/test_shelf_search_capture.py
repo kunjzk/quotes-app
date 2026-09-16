@@ -95,7 +95,10 @@ class SearchViewTest(LibraryMixin, TestCase):
 
         data = self.client.get(reverse("quotes:search"), {"q": "herbert"}).json()
         self.assertEqual([p["id"] for p in data["passages"]], [self.dune_quote.id])
-        self.assertEqual(data["sources"], [{"id": self.dune.id, "title": "Dune", "creator": "Frank Herbert", "count": 1}])
+        self.assertEqual(
+            data["sources"],
+            [{"id": self.dune.id, "title": "Dune", "creator": "Frank Herbert", "count": 1, "marker": ""}],
+        )
 
     def test_excludes_deleted_passages(self):
         Quote.objects.filter(pk=self.dune_quote.pk).update(deleted_at=timezone.now())

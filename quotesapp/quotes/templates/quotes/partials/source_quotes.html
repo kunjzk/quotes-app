@@ -1,7 +1,7 @@
 <div class="panel-head">
     <h2>{{ source.title }}</h2>
     {% if source.creator %}<div class="by">{{ source.creator }}</div>{% endif %}
-    <div class="meta">{{ quotes|length }} passage{{ quotes|length|pluralize }}</div>
+    <div class="meta">{% if source.marker %}{{ source.kind_spec.label }} · {% endif %}{{ quotes|length }} passage{{ quotes|length|pluralize }}</div>
 </div>
 
 <ol class="passages">

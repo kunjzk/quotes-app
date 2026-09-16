@@ -1,4 +1,5 @@
 from quotes.models import Quote, Source, User, TodayPreference, TodaySelection
+from quotes.source_kinds import DEFAULT_KIND, get_kind
 from django.db import transaction, DataError, IntegrityError, DatabaseError
 from django.db.models import Count, Q, QuerySet
 from django.core.exceptions import ValidationError
@@ -8,6 +9,7 @@ from django.utils import timezone
 import logging
 import math
 import random
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,7 @@ def validate_quote_creation_input(quote_text: str, source: Source|None, title: s
     if page_number and page_number < 0:
         raise ValueError("Page number must be greater than or equal to 0.")
 
-def create_quote(quote_text: str, source: Source|None, title: str|None, creator: str|None, page_number: int|None, user: User) -> QuoteCreationResult:
+def create_quote(quote_text: str, source: Source|None, title: str|None, creator: str|None, page_number: int|None, user: User, kind: str = DEFAULT_KIND, timestamp_seconds: int|None = None) -> QuoteCreationResult:
     """
     Create a quote.
     If the quote validation fails, then the error message is returned.
@@ -72,6 +74,7 @@ def create_quote(quote_text: str, source: Source|None, title: str|None, creator:
             source, _ = Source.objects.get_or_create(
                     title=title,
                     creator=creator,
+                    kind=get_kind(kind).value,
                 )
         existing_quote = Quote.objects.filter(
             quote=quote_text,
@@ -85,10 +88,57 @@ def create_quote(quote_text: str, source: Source|None, title: str|None, creator:
                 quote=quote_text,
                 source=source,
                     user=user,
-                    page_number=page_number
+                    page_number=page_number,
+                    timestamp_seconds=timestamp_seconds,
                 )
             quote.save()
             return QuoteCreationResult(quote, "success", None, None)
+
+# "p. 42", "p.42", "page 42"
+PAGE_PATTERN = re.compile(r'\b(?:p\.?|page)\s*(\d+)', re.IGNORECASE)
+# "2:31", "at 2:31", "1:02:03"
+TIMESTAMP_PATTERN = re.compile(r'(?<![\d:])(?:at\s+)?(\d{1,3}):([0-5]\d)(?::([0-5]\d))?(?![\d:])', re.IGNORECASE)
+
+
+def parse_attribution(line: str, kind: str = DEFAULT_KIND) -> dict:
+    """
+    Read an attribution line - "— walden | Thoreau | p. 90", or
+    "— Heroes | David Bowie | 2:31" for a song - into its parts.
+
+    Which position is looked for depends on the kind: a page for print, a
+    timestamp for recordings, so a page number in a song title (or the other
+    way round) isn't mistaken for a position.
+    """
+    rest = (line or "").strip().lstrip("—-").strip()
+    page_number = None
+    timestamp_seconds = None
+
+    if get_kind(kind).locator == "timestamp":
+        match = TIMESTAMP_PATTERN.search(rest)
+        if match:
+            hours, minutes, seconds = (
+                (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+                if match.group(3) else (0, int(match.group(1)), int(match.group(2)))
+            )
+            timestamp_seconds = hours * 3600 + minutes * 60 + seconds
+            rest = TIMESTAMP_PATTERN.sub("", rest, count=1).strip()
+    else:
+        match = PAGE_PATTERN.search(rest)
+        if match:
+            page_number = int(match.group(1))
+            rest = PAGE_PATTERN.sub("", rest).strip()
+
+    parts = [part.strip() for part in rest.split("|")]
+    title = parts[0] if parts else ""
+    creator = parts[1] if len(parts) > 1 else ""
+    # A trailing separator is left over when the position was the last part.
+    return {
+        "title": title.rstrip("|").strip(),
+        "creator": creator,
+        "page_number": page_number,
+        "timestamp_seconds": timestamp_seconds,
+    }
+
 
 def find_quotes_and_send_email(user_id: int) -> None:
     """

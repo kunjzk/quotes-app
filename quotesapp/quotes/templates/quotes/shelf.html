@@ -28,6 +28,7 @@
                         data-url="{% url 'quotes:source_quotes' entry.source.id %}"
                         aria-pressed="{% if not query and entry.source.id == selected_source.id %}true{% else %}false{% endif %}">
                     <span class="t">{{ entry.source.title }}</span>
+                    {% if entry.source.marker %}<span class="k" aria-hidden="true">{{ entry.source.marker }}</span>{% endif %}
                     <span class="n">{{ entry.source.quote_count }}</span>
                 </button>
                 {% endfor %}

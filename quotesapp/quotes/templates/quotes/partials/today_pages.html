@@ -1,8 +1,8 @@
 {% for quote in quotes %}
 <article class="quote-page reading{% if forloop.first %} turn-in{% endif %}" data-page="{{ forloop.counter0 }}"{% if not forloop.first %} hidden{% endif %}>
-    <div class="folio">{{ quote.location_label }}</div>
+    <div class="folio">{{ quote.margin_label }}</div>
     <div>
-        <blockquote class="q{% if quote.quote|length > 120 %} long{% endif %}">{{ quote.quote }}</blockquote>
+        <blockquote class="q{% if quote.is_long %} long{% endif %}">{{ quote.quote }}</blockquote>
         <div class="attr">
             <span class="title">{{ quote.source.title }}</span>
             {% if quote.source.creator %}<span class="creator">{{ quote.source.creator }}</span>{% endif %}
@@ -17,7 +17,7 @@
 {% empty %}
 <div class="empty-state">
     <p>No passages match these criteria.</p>
-    <p class="hint">Pick another author or book above, or clear the filter.</p>
+    <p class="hint">Pick another author or source above, or clear the filter.</p>
 </div>
 {% endfor %}
 

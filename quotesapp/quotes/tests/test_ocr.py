@@ -338,6 +338,15 @@ class ImageUploadViewTest(TestCase):
                 self.assertIn('crop area', response.json()['error'])
                 extract.assert_not_called()
 
+    def test_response_includes_both_layouts(self):
+        with patch.object(
+            OCRService, 'extract_text_from_image',
+            return_value=OCRResult(text='One two', lines='One\ntwo', confidence=91.4, word_count=2),
+        ):
+            data = self.upload().json()
+        self.assertEqual(data['text'], 'One two')
+        self.assertEqual(data['lines'], 'One\ntwo')
+
     def test_response_includes_confidence_when_reliable(self):
         with patch.object(
             OCRService, 'extract_text_from_image',

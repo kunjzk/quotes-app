@@ -20,6 +20,7 @@ import io
 from .services import (
     create_quote,
     filter_quotes_for_today,
+    parse_attribution,
     get_today_preference,
     get_todays_quotes,
     search_passages,
@@ -28,6 +29,7 @@ from .services import (
     update_today_preference,
 )
 from .ocr_service import OCRService
+from .source_kinds import get_kind, kinds_context
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +231,9 @@ class TodaySuggestView(LoginRequiredMixin, View):
 class CaptureView(LoginRequiredMixin, TemplateView):
     """Minimalist quote capture with inline attribution parsing."""
     template_name = 'quotes/capture.html'
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs) | {'source_kinds': kinds_context()}
     
     def post(self, request):
         content = request.POST.get('content', '').strip()
@@ -253,44 +258,35 @@ class CaptureView(LoginRequiredMixin, TemplateView):
         if not quote_text:
             return JsonResponse({'error': 'Quote text cannot be empty'}, status=400)
         
-        # Parse attribution: "— title p. 123" or "— title" or "— title | creator"
-        source_title = None
-        creator = None
-        page_number = None
-        
-        if attribution_line:
-            # Remove leading dashes
-            attr = attribution_line.lstrip('—-').strip()
-            
-            # Check for page number pattern: "p. 123" or "p.123" or "page 123"
-            page_match = re.search(r'\b(?:p\.?|page)\s*(\d+)', attr, re.IGNORECASE)
-            if page_match:
-                page_number = int(page_match.group(1))
-                # Remove page number from attribution
-                attr = re.sub(r'\s*\b(?:p\.?|page)\s*\d+', '', attr, flags=re.IGNORECASE).strip()
-            
-            # Check for creator pattern: "title | creator"
-            if '|' in attr:
-                parts = attr.split('|')
-                source_title = parts[0].strip()
-                creator = parts[1].strip() if len(parts) > 1 else None
-            else:
-                source_title = attr
-        
-        # Match an existing source by title; otherwise create one. create_quote
-        # takes either an existing source or a new title + creator, never both.
+        kind = get_kind(request.POST.get('kind')).value
+        attribution = parse_attribution(attribution_line, kind) if attribution_line else {}
+        source_title = attribution.get('title') or None
+        creator = attribution.get('creator') or None
+
+        # Match an existing source of this kind by title; otherwise create one.
+        # create_quote takes either an existing source or a new title +
+        # creator, never both.
         try:
-            source = Source.objects.filter(title__iexact=source_title).first() if source_title else None
+            source = (
+                Source.objects.filter(title__iexact=source_title, kind=kind).first()
+                if source_title else None
+            )
             if source_title and not source and not creator:
-                source = Source.objects.create(title=source_title, creator='')
+                source = Source.objects.create(
+                    title=source_title, creator='', kind=kind,
+                    collection=attribution.get('collection', ''),
+                )
 
             result = create_quote(
                 quote_text,
                 source,
                 None if source else source_title,
                 None if source else creator,
-                page_number,
+                attribution.get('page_number'),
                 request.user,
+                kind=kind,
+                timestamp_seconds=attribution.get('timestamp_seconds'),
+                collection=attribution.get('collection', ''),
             )
         except Exception as e:
             logger.error(f"Error creating quote: {e}")
@@ -303,6 +299,8 @@ class CaptureView(LoginRequiredMixin, TemplateView):
             'success': True,
             'quote_id': result.quote.id,
             'source_title': result.quote.source.title,
+            'kind': result.quote.source.kind,
+            'location': result.quote.location_label,
             'message': 'Quote saved' if result.status == "success" else 'Quote already exists',
         })
 
@@ -410,7 +408,10 @@ class SearchView(LoginRequiredMixin, View):
                 for quote in passages
             ],
             'sources': [
-                {'id': source.id, 'title': source.title, 'creator': source.creator, 'count': source.quote_count}
+                {
+                    'id': source.id, 'title': source.title, 'creator': source.creator,
+                    'count': source.quote_count, 'marker': source.marker,
+                }
                 for source in sources
             ],
         })
@@ -431,7 +432,13 @@ class SourceSuggestView(LoginRequiredMixin, View):
             title__icontains=query
         ).distinct()[:5]
         
-        suggestions = [{'title': source.title, 'creator': source.creator} for source in sources]
+        suggestions = [
+            {
+                'title': source.title, 'creator': source.creator,
+                'kind': source.kind, 'collection': source.collection,
+            }
+            for source in sources
+        ]
         
         return JsonResponse({'suggestions': suggestions})
 
@@ -586,6 +593,9 @@ class RegisterView(CreateView):
 class ImageUploadView(LoginRequiredMixin, TemplateView):
     """Upload image and extract text using OCR."""
     template_name = 'quotes/image_upload.html'
+
+    def get_context_data(self, **kwargs):
+        return super().get_context_data(**kwargs) | {'source_kinds': kinds_context()}
     
     def post(self, request):
         if 'image' not in request.FILES:
@@ -631,6 +641,7 @@ class ImageUploadView(LoginRequiredMixin, TemplateView):
             return JsonResponse({
                 'success': True,
                 'text': cleaned_text,
+                'lines': OCRService.preprocess_extracted_text(result.lines),
                 'confidence': round(result.confidence, 1),
                 'low_confidence': low_confidence,
                 'message': 'Text extracted successfully'

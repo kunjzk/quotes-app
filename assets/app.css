@@ -416,6 +416,7 @@ body.focus .criteria:focus-within { opacity: 1; transform: none; }
   font-weight: 500;
   letter-spacing: 0.01em;
 }
+.spine .k { flex: 0 0 auto; font-size: 12px; opacity: 0.9; padding-top: 8px; }
 .spine .n {
   flex: 0 0 auto;
   width: 100%;
@@ -556,6 +557,20 @@ mark { background: var(--teal-soft); color: inherit; padding: 0 0.08em; border-r
 .source-pop button span:last-child { font-size: 13px; font-style: italic; color: var(--graphite); }
 .source-pop button:hover,
 .source-pop button.hi { background: var(--teal-soft); }
+.kind-switch { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.kind-switch button {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 3px 2px;
+  border-bottom: 1.5px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+.kind-switch button:hover { color: var(--ink); }
+.kind-switch button[aria-checked="true"] { color: var(--ink); border-bottom-color: var(--teal); }
+
 .parsed {
   display: flex;
   flex-wrap: wrap;

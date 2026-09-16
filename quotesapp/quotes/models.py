@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractUser
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q, UniqueConstraint
 
+from .source_kinds import DEFAULT_KIND, KIND_CHOICES, SourceKind, get_kind
+
 # Create your models here.
 
 class QuoteManager(models.Manager):
@@ -56,6 +58,16 @@ class Quote(models.Model):
             return f"p. {self.page_number}"
         return self.location
 
+    @property
+    def margin_label(self) -> str:
+        """What the Today margin shows: the position, or the kind's marker."""
+        return self.location_label or self.source.marker
+
+    @property
+    def is_long(self) -> bool:
+        """Long passages and multi-line lyrics are set smaller so they fit."""
+        return len(self.quote) > 120 or self.quote.count("\n") >= 3
+
 
 def format_timestamp(seconds: int) -> str:
     """2:31 under an hour, 1:02:03 beyond."""
@@ -67,23 +79,42 @@ def format_timestamp(seconds: int) -> str:
 
 
 class Source(models.Model):
-    """Where a passage comes from: a book today, other kinds (e.g. songs) later."""
+    """Where a passage comes from: a book, a song, and more kinds in time."""
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default=DEFAULT_KIND)
     title = models.CharField(max_length=255)
     # The author of a book; the artist, speaker or director for other kinds.
     creator = models.CharField(max_length=255)
+    # What the source belongs to, where the kind has one: a song's album.
+    # Not part of a source's identity, so it can be filled in later.
+    collection = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
+            # A title and creator can belong to both a book and a song:
+            # Born to Run is a Springsteen memoir and a Springsteen song.
             UniqueConstraint(
-                fields=["title", "creator"],
-                name="unique_source_title_creator"
+                fields=["title", "creator", "kind"],
+                name="unique_source_title_creator_kind"
             )
         ]
 
     def __str__(self):
         return f"{self.title} by {self.creator}"
+
+    @property
+    def kind_spec(self) -> SourceKind:
+        """Everything that differs between kinds: labels, marker, line breaks."""
+        return get_kind(self.kind)
+
+    @property
+    def marker(self) -> str:
+        return self.kind_spec.marker
+
+    @property
+    def collection_label(self) -> str:
+        return self.kind_spec.collection_label
 
 class User(AbstractUser):
     email = models.EmailField(unique=True, blank=False)
@@ -97,7 +128,7 @@ class User(AbstractUser):
 class TodayPreference(models.Model):
     """
     Per-user criteria for the Today screen:
-    "I want to see __ quotes by ____ author in ____ book."
+    "I want to see __ quotes by ____ author from ____ source."
 
     Blank creator / source_title mean "any".
     """

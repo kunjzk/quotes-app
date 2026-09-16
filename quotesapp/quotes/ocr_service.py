@@ -16,9 +16,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class OCRResult:
+    # Paragraphs, with each paragraph's lines joined into flowing text.
     text: str
+    # The same passage with every line kept, for lyrics and verse.
+    lines: str = ""
     # Character-weighted mean of Tesseract's per-word confidence, 0-100.
-    confidence: float
+    confidence: float = 0.0
     # Extra rotation (degrees, counter-clockwise) applied on top of the
     # EXIF-corrected image to get the best read.
     rotation: int = 0
@@ -243,11 +246,13 @@ def build_ocr_result(data: dict) -> OCRResult:
         word_count += 1
 
     if not word_count:
-        return OCRResult(text='', confidence=0.0, word_count=0)
+        return OCRResult(text='', lines='', confidence=0.0, word_count=0)
 
     ordered = [lines[key] for key in sorted(lines)]
+    paragraphs = _group_paragraphs(ordered)
     return OCRResult(
-        text='\n\n'.join(_join_lines(p) for p in _group_paragraphs(ordered)),
+        text='\n\n'.join(_join_lines(p) for p in paragraphs),
+        lines='\n\n'.join('\n'.join(line.text for line in p) for p in paragraphs),
         confidence=weighted_conf / total_chars,
         word_count=word_count,
     )

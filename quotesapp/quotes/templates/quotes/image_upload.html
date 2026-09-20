@@ -86,7 +86,7 @@
                 <p class="font-semibold mb-1">This text looks unreliable (<span id="confidence-value"></span>% confidence)</p>
                 <p class="text-sm">Try cropping tighter to just the passage, or retake the photo with the page flat, the camera level and even lighting. You can still select and edit what was found below.</p>
             </div>
-            <div id="extracted-text" class="p-4 rounded-lg font-serif text-lg leading-relaxed whitespace-pre-wrap border" style="border-color: var(--teal); background-color: rgba(45, 106, 106, 0.05);">
+            <div id="extracted-text" class="extract p-4 rounded-lg font-serif text-lg leading-relaxed whitespace-pre-wrap border" style="border-color: var(--teal); background-color: rgba(45, 106, 106, 0.05);">
             </div>
         </div>
 
@@ -95,6 +95,7 @@
             <h3 class="text-xl font-semibold mb-3">Select Quotes</h3>
             <p class="mb-4" style="color: var(--grey);">
                 Select text above to create quotes. You can select multiple passages from the same image.
+                On a phone, press and hold a word, drag the handles across the passage, then tap Add&nbsp;quote.
             </p>
             
             <!-- Common Metadata Form -->
@@ -133,11 +134,7 @@
             <!-- Selected Quotes List -->
             <div id="selected-quotes-container" class="mb-6">
                 <h4 class="font-semibold mb-3">Selected Quotes (<span id="quote-count">0</span>)</h4>
-                <div id="selected-quotes-list" class="space-y-3">
-                    <p class="text-center py-8" style="color: var(--grey);" id="no-quotes-message">
-                        No quotes selected yet. Select text above to add a quote.
-                    </p>
-                </div>
+                <div id="selected-quotes-list" class="space-y-3"></div>
             </div>
 
             <div class="flex gap-3">
@@ -149,6 +146,11 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <div class="selbar" id="selection-bar">
+        <span class="peek" id="selection-peek"></span>
+        <button type="button" id="selection-add">Add quote</button>
     </div>
 </div>
 
@@ -212,6 +214,7 @@ function setKind(value) {
 function showExtractedText() {
     const text = kind.keeps_line_breaks ? (extracted.lines || extracted.text) : extracted.text;
     document.getElementById('extracted-text').textContent = text;
+    releaseSelection();  // the held passage belonged to the text just replaced
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -220,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (button) setKind(button.dataset.kind);
     });
     setKind(KINDS[0].value);
+    updateQuotesList();
 });
 let sourceTitleTimeout = null;
 let creatorTimeout = null;
@@ -421,6 +425,7 @@ document.getElementById('choose-again').addEventListener('click', () => {
     document.getElementById('extracted-content').classList.add('hidden');
     document.getElementById('error-message').classList.add('hidden');
     document.getElementById('upload-step').classList.remove('hidden');
+    releaseSelection();
 });
 
 function showError(message) {
@@ -428,23 +433,74 @@ function showError(message) {
     document.getElementById('error-message').classList.remove('hidden');
 }
 
-function addSelectedText() {
+// Touching anything on a phone drops the selection, and it goes before the
+// button's click, so reading the selection from the button always came back
+// empty and no passage could be added. Every selection made inside the
+// extracted text is held as it is made, and that is what gets added.
+const extractEl = document.getElementById('extracted-text');
+const selectionBar = document.getElementById('selection-bar');
+const selectionPeek = document.getElementById('selection-peek');
+let heldSelection = '';
+
+// Only the passage counts: a selection in a form field is not a quote. A
+// handle dragged past the edge of the box is, though, so the range is clipped
+// back to the extracted text rather than thrown away.
+function liveSelection() {
     const selection = window.getSelection();
-    const selectedText = selection.toString().trim();
-    
+    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return '';
+    const range = selection.getRangeAt(0).cloneRange();
+    if (!range.intersectsNode(extractEl)) return '';
+    const passage = document.createRange();
+    passage.selectNodeContents(extractEl);
+    if (range.compareBoundaryPoints(Range.START_TO_START, passage) < 0) {
+        range.setStart(passage.startContainer, passage.startOffset);
+    }
+    if (range.compareBoundaryPoints(Range.END_TO_END, passage) > 0) {
+        range.setEnd(passage.endContainer, passage.endOffset);
+    }
+    return range.toString().trim();
+}
+
+function holdSelection() {
+    const text = liveSelection();
+    if (!text) return;  // losing the selection must not lose the passage
+    heldSelection = text;
+    selectionPeek.textContent = text.length > 60 ? `${text.slice(0, 60)}…` : text;
+    selectionBar.classList.add('show');
+}
+
+function releaseSelection() {
+    heldSelection = '';
+    selectionBar.classList.remove('show');
+}
+
+document.addEventListener('selectionchange', holdSelection);
+// Grabbing a handle without moving it changes nothing to listen for, so the
+// end of every gesture is a second chance to notice what is selected.
+document.addEventListener('pointerup', holdSelection);
+// Reaching for the passage again is the start of a new selection.
+extractEl.addEventListener('pointerdown', releaseSelection);
+
+function addSelectedText() {
+    const selectedText = liveSelection() || heldSelection;
+
     if (!selectedText) {
-        alert('Please select some text first');
+        toast('Select a passage in the extracted text first.', { error: true });
         return;
     }
-    
+
     selectedQuotes.push({
         text: selectedText,
         id: Date.now()
     });
-    
+
     updateQuotesList();
-    selection.removeAllRanges();
+    releaseSelection();
+    window.getSelection().removeAllRanges();
+    toast('Passage added.');
 }
+
+document.getElementById('selection-add').addEventListener('click', addSelectedText);
 
 function removeQuote(id) {
     selectedQuotes = selectedQuotes.filter(q => q.id !== id);
@@ -453,19 +509,16 @@ function removeQuote(id) {
 
 function updateQuotesList() {
     const container = document.getElementById('selected-quotes-list');
-    const countEl = document.getElementById('quote-count');
-    const noQuotesMsg = document.getElementById('no-quotes-message');
-    
-    countEl.textContent = selectedQuotes.length;
-    
+    document.getElementById('quote-count').textContent = selectedQuotes.length;
+
     if (selectedQuotes.length === 0) {
-        noQuotesMsg.classList.remove('hidden');
-        container.innerHTML = '';
-        container.appendChild(noQuotesMsg);
+        container.innerHTML = `
+            <p class="text-center py-8" style="color: var(--grey);" id="no-quotes-message">
+                No quotes selected yet. Select text above to add a quote.
+            </p>`;
         return;
     }
-    
-    noQuotesMsg.classList.add('hidden');
+
     container.innerHTML = selectedQuotes.map((quote, index) => `
         <div class="p-4 rounded-lg border" style="border-color: var(--teal); background-color: var(--paper);">
             <div class="flex justify-between items-start mb-2">

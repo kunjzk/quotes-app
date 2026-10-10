@@ -64,6 +64,7 @@
                 <summary aria-label="Account menu">{{ user.first_name|default:user.username|slice:":1"|upper }}</summary>
                 <div class="menu">
                     <span class="cap">Signed in as {{ user.first_name|default:user.username }}</span>
+                    <a href="{% url 'quotes:account' %}">Account</a>
                     {% if user.is_staff %}<a href="{% url 'admin:index' %}">Admin</a>{% endif %}
                     <form method="post" action="{% url 'logout' %}">
                         {% csrf_token %}

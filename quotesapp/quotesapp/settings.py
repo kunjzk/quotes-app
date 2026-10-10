@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import os
 import sys
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -202,7 +203,13 @@ CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_BACKEND = 'django-db'
-CELERY_TIMEZONE='UTC'
+CELERY_TIMEZONE = 'UTC'
+CELERY_BEAT_SCHEDULE = {
+    'create-email-tasks': {
+        'task': 'quotes.tasks.create_email_tasks',
+        'schedule': crontab(minute='*/15'),
+    },
+}
 
 EMAIL_BACKEND = os.getenv('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.getenv('EMAIL_HOST', 'localhost')
@@ -212,3 +219,17 @@ EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'False').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'noreply@quotesapp.local')
+
+
+def _app_url() -> str:
+    explicit = os.getenv('APP_URL', '').strip().rstrip('/')
+    if explicit:
+        return explicit
+    domain = os.getenv('APP_DOMAIN', 'localhost:8000').strip().rstrip('/')
+    if domain.startswith('http://') or domain.startswith('https://'):
+        return domain
+    scheme = 'http' if domain.startswith('localhost') or domain.startswith('127.') else 'https'
+    return f'{scheme}://{domain}'
+
+
+APP_URL = _app_url()

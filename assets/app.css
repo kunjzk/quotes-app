@@ -755,6 +755,74 @@ mark { background: var(--teal-soft); color: inherit; padding: 0 0.08em; border-r
 .capture-panel h1 { margin: 0 0 6px; font-size: 26px; font-weight: 500; }
 .capture-panel .lede { margin: 0 0 28px; color: var(--graphite); }
 
+/* ------------------------------------------------------------------ account */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.account-page { max-width: 560px; margin: 0 auto; padding: 34px 32px 80px; }
+.account-page h1 { margin: 0 0 6px; font-size: 26px; font-weight: 500; }
+.account-page .lede { margin: 0 0 28px; color: var(--graphite); }
+.account-page .hint { margin: 0 0 12px; color: var(--graphite); }
+.account-page .hint a { color: var(--teal); text-decoration: underline; text-underline-offset: 4px; }
+.account-page .addr {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--graphite);
+  margin: 0 0 28px;
+}
+.account-page .flash { list-style: none; margin: 0 0 22px; padding: 0; }
+.account-page .flash li {
+  font-family: var(--mono);
+  font-size: 13px;
+  margin: 0 0 8px;
+  color: var(--teal);
+}
+.account-page .flash li.error { color: var(--danger); }
+.account-page .field { margin: 22px 0; }
+.account-page .cap {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--graphite);
+  margin-bottom: 8px;
+}
+.account-page .check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+.account-page .check input { width: 16px; height: 16px; accent-color: var(--teal); }
+.account-page select {
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--rule);
+  border-radius: 0;
+  padding: 4px 2px;
+}
+.account-page select:focus { outline: none; border-bottom-color: var(--teal); }
+.account-page .time { display: flex; align-items: baseline; gap: 8px; }
+.account-page .colon { color: var(--graphite); }
+.account-page .time .hint { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.account-page .form-error { margin: 8px 0 0; font-family: var(--mono); font-size: 12px; color: var(--danger); }
+.account-page .actions { display: flex; gap: 16px; margin-top: 28px; }
+.account-page .preview-form { margin-top: 18px; }
+
 /* Picking passages out of the extracted text */
 
 /* The one place on the page meant to be selected by hand, so it says so:
@@ -888,6 +956,7 @@ dialog.palette::backdrop { background: var(--backdrop); backdrop-filter: blur(3p
   .rack { position: static; }
   .shelf-filter { margin-left: 0; width: 100%; min-width: 0; }
   .capture { padding: 24px 20px 80px; }
+  .account-page { padding: 24px 20px 80px; }
 }
 
 @media (max-width: 520px) {

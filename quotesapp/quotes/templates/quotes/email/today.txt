@@ -1,0 +1,17 @@
+Dear {{ user.first_name }},
+
+Here are today's passages from your collection.
+
+{% for quote in quotes %}
+{{ quote.quote }}
+{{ quote.source.title }} — {{ quote.source.creator }}{% if quote.location_label %}
+{{ quote.location_label }}{% endif %}
+
+{% endfor %}{% if omitted %}…and {{ omitted }} more in ReadReadRead.
+
+{% endif %}See you tomorrow.
+
+ReadReadRead
+{{ today_url }}
+
+Unsubscribe: {{ unsubscribe_url }}

@@ -12,6 +12,8 @@ urlpatterns = [
     path("capture/", views.CaptureView.as_view(), name="capture"),
     path("photo/", views.ImageUploadView.as_view(), name="image_upload"),
     path("import/", views.BulkImportView.as_view(), name="bulk_import"),
+    path("account/", views.AccountView.as_view(), name="account"),
+    path("email/unsubscribe/<str:token>/", views.UnsubscribeView.as_view(), name="email_unsubscribe"),
     
     # HTMX endpoints
     path("api/source/<int:pk>/quotes/", views.SourceQuotesView.as_view(), name="source_quotes"),

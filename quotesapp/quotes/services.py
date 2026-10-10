@@ -1,10 +1,10 @@
-from quotes.models import Quote, Source, User, TodayPreference, TodaySelection
+from zoneinfo import ZoneInfo, available_timezones
+
+from quotes.models import EmailPreference, Quote, Source, User, TodayPreference, TodaySelection
 from quotes.source_kinds import DEFAULT_KIND, get_kind
 from django.db import transaction, DataError, IntegrityError, DatabaseError
 from django.db.models import Count, Q, QuerySet
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
-from django.conf import settings
 from django.utils import timezone
 import logging
 import math
@@ -150,31 +150,6 @@ def remember_collection(source: Source, collection: str) -> None:
         source.save(update_fields=["collection"])
 
 
-def find_quotes_and_send_email(user_id: int) -> None:
-    """
-    Pick three random quotes from the user's quotes and send an email to the user.
-    """
-    user = User.objects.get(id=user_id)
-    logger.info(f"Finding quotes and sending email to {user.email}")
-    quotes = list(Quote.objects.filter(user=user).select_related('source').order_by('?')[:3])
-    if not quotes:
-        logger.info(f"No quotes found for user {user.email}, not sending email")
-        return
-    
-    date = timezone.now().strftime("%Y-%m-%d")
-    subject = f"{date}: Quotes from {_join_names([quote.source.creator for quote in quotes])}"
-    message = ""
-    message += f"Dear {user.first_name},\n\n"
-    message += f"Here are three quotes from your collection. Hope you enjoy them!\n\n"
-    for quote in quotes:
-        message += f"{quote.quote}\n"
-        message += f"{quote.source.title} - {quote.source.creator}\n"
-        if quote.location_label:
-            message += f"{quote.location_label}\n"
-    message += "\n\nSee you tomorrow!\n\nBest regards,\nThe Quotes App"
-    send_mail(subject, message, settings.DEFAULT_FROM_EMAIL, [user.email])
-
-
 def _join_names(names: list[str]) -> str:
     """"A", "A and B", "A, B and C", skipping blanks and repeats."""
     unique = list(dict.fromkeys(name for name in names if name))
@@ -293,6 +268,15 @@ def _ordered_by_ids(queryset: QuerySet[Quote], ids: list[int]) -> list[Quote]:
     return [by_id[quote_id] for quote_id in ids if quote_id in by_id]
 
 
+def user_timezone(user: User):
+    """The zone today's date is computed in, so the inbox and Today agree."""
+    preference = getattr(user, "email_preference", None)
+    name = EmailPreference.DEFAULT_TIMEZONE
+    if preference and preference.timezone in available_timezones():
+        name = preference.timezone
+    return ZoneInfo(name)
+
+
 def get_todays_quotes(user: User, preference: TodayPreference | None = None, now=None, rng=None) -> list[Quote]:
     """
     Quotes for the user's Today screen.
@@ -302,7 +286,7 @@ def get_todays_quotes(user: User, preference: TodayPreference | None = None, now
     `last_shown_at` is stamped, which feeds the recency bias on later days.
     """
     now = now or timezone.now()
-    today = timezone.localdate(now)
+    today = timezone.localdate(now, timezone=user_timezone(user))
     preference = preference or get_today_preference(user)
     candidates = filter_quotes_for_today(user, preference.creator, preference.source_title)
 

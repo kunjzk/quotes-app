@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Source, Quote
+from .models import User, Source, Quote, EmailPreference, EmailSend
 from .forms import QuotesUserCreationForm, QuotesUserChangeForm
 
 
@@ -31,3 +31,15 @@ class QuoteAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return Quote.all_objects.all()
+
+
+@admin.register(EmailPreference)
+class EmailPreferenceAdmin(admin.ModelAdmin):
+    list_display = ("user", "enabled", "timezone", "send_hour", "send_minute", "unsubscribed_at")
+    list_filter = ("enabled", "timezone")
+
+
+@admin.register(EmailSend)
+class EmailSendAdmin(admin.ModelAdmin):
+    list_display = ("user", "date", "sent_at")
+    list_filter = ("date",)

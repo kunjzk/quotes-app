@@ -5,18 +5,26 @@ from .models import Quote, Source, User, TodayPreference
 from django.db import transaction, DataError
 from django.urls import reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
-from .forms import QuoteCreateForm, UserRegistrationForm
+from .forms import EmailPreferenceForm, QuoteCreateForm, UserRegistrationForm
 from django.utils import timezone
+from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
-from django.http import JsonResponse
+from django.core.signing import BadSignature, SignatureExpired
+from django.http import Http404, JsonResponse
 from django.db.models import Count, Q
 import logging
 import math
 import re
 import csv
 import io
+from .mail import (
+    find_quotes_and_send_email,
+    get_email_preference,
+    unsubscribe_user,
+    user_from_unsubscribe_token,
+)
 from .services import (
     create_quote,
     filter_quotes_for_today,
@@ -226,6 +234,65 @@ class TodaySuggestView(LoginRequiredMixin, View):
             source_title=request.GET.get('source', ''),
         )
         return JsonResponse({'suggestions': suggestions})
+
+
+class AccountView(LoginRequiredMixin, View):
+    """Turn the daily letter on or off, pick a send time, or mail a preview."""
+
+    template_name = "quotes/account.html"
+
+    def get(self, request):
+        preference = get_email_preference(request.user)
+        return render(
+            request,
+            self.template_name,
+            {"form": EmailPreferenceForm(instance=preference), "preference": preference},
+        )
+
+    def post(self, request):
+        preference = get_email_preference(request.user)
+        if request.POST.get("action") == "preview":
+            return self._preview(request)
+
+        form = EmailPreferenceForm(request.POST, instance=preference)
+        if not form.is_valid():
+            return render(request, self.template_name, {"form": form, "preference": preference})
+
+        saved = form.save(commit=False)
+        if saved.enabled:
+            saved.unsubscribed_at = None
+        elif saved.unsubscribed_at is None:
+            saved.unsubscribed_at = timezone.now()
+        saved.save()
+        messages.success(request, "Saved.")
+        return redirect("quotes:account")
+
+    def _preview(self, request):
+        try:
+            sent = find_quotes_and_send_email(request.user.id, preview=True)
+        except Exception:
+            logger.exception("Preview email failed", extra={"user_id": request.user.id})
+            messages.error(request, "Could not send a preview. Try again in a moment.")
+            return redirect("quotes:account")
+        if sent:
+            messages.success(request, f"A preview is on its way to {request.user.email}.")
+        else:
+            messages.error(request, "Nothing to send. Capture a passage first.")
+        return redirect("quotes:account")
+
+
+class UnsubscribeView(View):
+    """Signed link from the daily letter; no login required."""
+
+    template_name = "quotes/unsubscribe.html"
+
+    def get(self, request, token):
+        try:
+            user = user_from_unsubscribe_token(token)
+        except (BadSignature, SignatureExpired, ValueError, TypeError, User.DoesNotExist):
+            raise Http404("This unsubscribe link is not valid.")
+        unsubscribe_user(user)
+        return render(request, self.template_name, {"email": user.email})
 
 
 class CaptureView(LoginRequiredMixin, TemplateView):

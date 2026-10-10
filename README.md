@@ -38,29 +38,24 @@ The app uses **MailHog** for local email testing. All emails sent by the applica
 
 ### Testing Email Functionality
 
+The daily letter is the Today screen, delivered: same passages, same criteria.
+
 1. **Create test data:**
    - Go to http://localhost:8000
    - Create a user account
-   - Add at least 3 quotes (with different books)
+   - Add at least a few passages (books or songs)
 
-2. **Trigger email manually via Django shell:**
-   ```bash
-   docker-compose exec quotes-app python manage.py shell
-   ```
-   Then run:
-   ```python
-   from quotes.tasks import send_email_task
-   send_email_task.delay(1)  # Replace 1 with your user ID
-   exit()
-   ```
+2. **Send a preview from the app:**
+   - Open the account menu (your initial in the top bar) → Account
+   - Choose a timezone and send time, then **Send a preview**
 
 3. **View the email:**
    - Open http://localhost:8025 in your browser
-   - You should see the email with 3 random quotes from your collection
+   - You should see today's passages, with a link back to ReadReadRead
 
 4. **Scheduled emails:**
-   - The Celery beat scheduler automatically sends emails daily at 7:30 AM UTC
-   - Check the `quotes-celery-beat` logs to verify the schedule: `docker-compose logs -f quotes-celery-beat`
+   - Celery beat checks every 15 minutes and sends once the user's local send time has passed
+   - Check the `quotes-celery-beat` logs: `docker-compose logs -f quotes-celery-beat`
 
 ## What make up does
 
@@ -124,7 +119,7 @@ Benefits:
 - Quote management (create, read, update, soft delete)
 - Book management with automatic creation
 - Duplicate quote detection
-- Scheduled daily email reminders with random quotes
+- Daily email of today's passages, at a time you choose
 - Background task processing with Celery
 - Admin panel for user and content management
 - Structured logging for key operations

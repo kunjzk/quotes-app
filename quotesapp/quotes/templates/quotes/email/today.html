@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<body style="margin:0;padding:0;background:#e8ebe8;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#e8ebe8;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="font-family:Georgia,'Times New Roman',serif;color:#1a2332;">
+              <p style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#687170;margin:0 0 24px;">ReadReadRead</p>
+              <p style="font-size:17px;line-height:1.5;margin:0 0 8px;">Dear {{ user.first_name }},</p>
+              <p style="font-size:17px;line-height:1.5;margin:0 0 28px;">Here are today's passages from your collection.</p>
+              {% for quote in quotes %}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 28px;">
+                <tr>
+                  <td style="border-top:1px solid rgba(26,35,50,0.11);padding-top:20px;">
+                    <p style="font-size:{% if quote.is_long %}18px{% else %}22px{% endif %};line-height:1.45;font-style:italic;margin:0 0 14px;white-space:pre-wrap;">{{ quote.quote }}</p>
+                    <p style="font-size:14px;margin:0;color:#687170;">
+                      {{ quote.source.title }}{% if quote.source.creator %} · {{ quote.source.creator }}{% endif %}{% if quote.location_label %} · {{ quote.location_label }}{% endif %}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              {% endfor %}
+              {% if omitted %}
+              <p style="font-size:14px;color:#687170;margin:0 0 8px;">…and {{ omitted }} more in ReadReadRead.</p>
+              {% endif %}
+              <p style="margin:32px 0 0;font-size:15px;"><a href="{{ today_url }}" style="color:#2d6a6a;">Open in ReadReadRead</a></p>
+              <p style="font-family:'IBM Plex Mono',Menlo,monospace;font-size:11px;color:#9aa19f;margin:32px 0 0;">
+                <a href="{{ unsubscribe_url }}" style="color:#9aa19f;">Unsubscribe</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

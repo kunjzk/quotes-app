@@ -1,6 +1,7 @@
 from django import forms
-from .models import User, Source, Quote
+from .models import User, Source, Quote, EmailPreference
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from quotes.mail import timezone_choices
 
 class QuotesUserCreationForm(UserCreationForm):
     email = forms.EmailField(required=True)
@@ -88,3 +89,34 @@ class UserRegistrationForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class EmailPreferenceForm(forms.ModelForm):
+    """Account page: whether, when, and in which zone to send today's letter."""
+
+    class Meta:
+        model = EmailPreference
+        fields = ["enabled", "timezone", "send_hour", "send_minute"]
+        labels = {
+            "enabled": "Email me today's passages",
+            "timezone": "Timezone",
+            "send_hour": "Hour",
+            "send_minute": "Minute",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        current = ""
+        if self.instance and self.instance.timezone:
+            current = self.instance.timezone
+        self.fields["timezone"].widget = forms.Select(choices=timezone_choices(current))
+        self.fields["send_hour"].widget = forms.Select(
+            choices=[(hour, f"{hour:02d}") for hour in range(24)]
+        )
+        minute_choices = [(minute, f"{minute:02d}") for minute in (0, 15, 30, 45)]
+        current_minute = getattr(self.instance, "send_minute", None)
+        if current_minute not in (None, *[m for m, _ in minute_choices]):
+            minute_choices.append((current_minute, f"{current_minute:02d}"))
+            minute_choices.sort()
+        self.fields["send_minute"].widget = forms.Select(choices=minute_choices)
+        self.fields["enabled"].widget = forms.CheckboxInput()

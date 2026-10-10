@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import TestCase
 
+from quotes.models import EmailPreference
+
 User = get_user_model()
 
 
@@ -32,6 +34,7 @@ class SeedAccountsTest(TestCase):
         kunal = User.objects.get(username="kunal")
         self.assertFalse(kunal.is_superuser)
         self.assertFalse(kunal.is_staff)
+        self.assertEqual(EmailPreference.objects.get(user=kunal).timezone, "Asia/Singapore")
 
     def test_seeded_passwords_work(self):
         call_command("seed_accounts")

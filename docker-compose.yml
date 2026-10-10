@@ -32,6 +32,7 @@ services:
       EMAIL_HOST: quotes-mailhog
       EMAIL_PORT: 1025
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost:8000}
   quotes-redis:
     image: redis:latest
     ports:
@@ -63,6 +64,7 @@ services:
       EMAIL_HOST: quotes-mailhog
       EMAIL_PORT: 1025
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost:8000}
   quotes-celery-beat:
     build:
       context: .
@@ -85,6 +87,7 @@ services:
       EMAIL_HOST: quotes-mailhog
       EMAIL_PORT: 1025
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-noreply@quotesapp.local}
+      APP_DOMAIN: ${APP_DOMAIN:-localhost:8000}
 
 volumes:
   postgres_data:

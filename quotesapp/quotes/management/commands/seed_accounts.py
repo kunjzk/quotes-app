@@ -10,6 +10,8 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
+from quotes.models import EmailPreference
+
 User = get_user_model()
 
 WEAK_PASSWORDS = {"admin", "password", "kunal", "changeme"}
@@ -45,6 +47,7 @@ class Command(BaseCommand):
                     last_name="Administrator",
                 ),
                 True,
+                EmailPreference.DEFAULT_TIMEZONE,
             ),
             (
                 _account_from_env(
@@ -56,13 +59,14 @@ class Command(BaseCommand):
                     last_name="Katarya",
                 ),
                 False,
+                "Asia/Singapore",
             ),
         ]
 
-        for account, is_superuser in accounts:
-            self._seed(account, is_superuser)
+        for account, is_superuser, email_timezone in accounts:
+            self._seed(account, is_superuser, email_timezone)
 
-    def _seed(self, account, is_superuser):
+    def _seed(self, account, is_superuser, email_timezone):
         username = account["username"]
         password = account["password"]
 
@@ -90,6 +94,11 @@ class Command(BaseCommand):
                     user.is_superuser = is_superuser
                     user.save(update_fields=["is_staff", "is_superuser"])
                 self.stdout.write(f"{username} already exists, left unchanged")
+
+        EmailPreference.objects.get_or_create(
+            user=user,
+            defaults={"timezone": email_timezone},
+        )
 
         if password in WEAK_PASSWORDS:
             self.stderr.write(

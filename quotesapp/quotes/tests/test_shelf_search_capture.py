@@ -157,6 +157,7 @@ class ChromeTest(LibraryMixin, TestCase):
         self.assertNotContains(resp, "cdn.tailwindcss.com")
         self.assertNotContains(resp, "unpkg.com")
         self.assertNotContains(resp, reverse("admin:index"))
+        self.assertContains(resp, reverse("quotes:account"))
 
     def test_admin_link_only_for_staff(self):
         self.user.is_staff = True
@@ -204,18 +205,19 @@ class LocationDisplayTest(LibraryMixin, TestCase):
 
     def test_email_prints_location_and_skips_it_when_missing(self):
         from django.core import mail
-        from quotes.services import find_quotes_and_send_email
+        from quotes.mail import find_quotes_and_send_email
 
         Quote.objects.filter(user=self.user).exclude(pk__in=[self.lyric.pk, self.dune_quote.pk]).delete()
         find_quotes_and_send_email(self.user.id)
         body = mail.outbox[0].body
-        self.assertIn("Heroes - David Bowie\n2:31\n", body)
-        self.assertIn("Dune - Frank Herbert\n", body)
+        self.assertIn("Heroes — David Bowie", body)
+        self.assertIn("2:31", body)
+        self.assertIn("Dune — Frank Herbert", body)
         self.assertNotIn("None", body)
 
     def test_email_with_a_single_quote(self):
         from django.core import mail
-        from quotes.services import find_quotes_and_send_email
+        from quotes.mail import find_quotes_and_send_email
 
         Quote.objects.filter(user=self.user).exclude(pk=self.lyric.pk).delete()
         find_quotes_and_send_email(self.user.id)

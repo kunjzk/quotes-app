@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Unsubscribed · ReadReadRead{% endblock %}
+
+{% block content %}
+<div class="account-page">
+    <h1>Unsubscribed</h1>
+    <p class="lede">{{ email }} will no longer receive the daily letter.</p>
+    <p class="hint">You can turn it back on from Account after you sign in.</p>
+    {% if user.is_authenticated %}
+    <p class="hint"><a href="{% url 'quotes:account' %}">Open Account</a></p>
+    {% else %}
+    <p class="hint"><a href="{% url 'login' %}">Sign in</a></p>
+    {% endif %}
+</div>
+{% endblock %}

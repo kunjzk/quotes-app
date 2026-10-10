@@ -1,6 +1,9 @@
+from zoneinfo import available_timezones
+
 from django.db import models
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db.models import Q, UniqueConstraint
 
@@ -174,3 +177,61 @@ class TodaySelection(models.Model):
 
     def __str__(self):
         return f"{self.user_id} @ {self.date}: {self.quote_ids}"
+
+
+def validate_timezone(value: str) -> None:
+    if value not in available_timezones():
+        raise ValidationError(f"Unknown timezone: {value}")
+
+
+class EmailPreference(models.Model):
+    """
+    Whether and when to email the user today's passages.
+
+    Blank timezone is not allowed; UTC is the default so Today and the inbox
+    stay on the same calendar date until the user picks a zone.
+    """
+    DEFAULT_TIMEZONE = "UTC"
+    DEFAULT_SEND_HOUR = 7
+    DEFAULT_SEND_MINUTE = 30
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_preference"
+    )
+    enabled = models.BooleanField(default=True)
+    timezone = models.CharField(
+        max_length=64, default=DEFAULT_TIMEZONE, validators=[validate_timezone]
+    )
+    send_hour = models.PositiveSmallIntegerField(
+        default=DEFAULT_SEND_HOUR,
+        validators=[MinValueValidator(0), MaxValueValidator(23)],
+    )
+    send_minute = models.PositiveSmallIntegerField(
+        default=DEFAULT_SEND_MINUTE,
+        validators=[MinValueValidator(0), MaxValueValidator(59)],
+    )
+    unsubscribed_at = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        state = "on" if self.enabled else "off"
+        return f"{self.user_id}: {state} at {self.send_hour:02d}:{self.send_minute:02d} {self.timezone}"
+
+
+class EmailSend(models.Model):
+    """One daily letter per user per local date, so Beat overlaps cannot double-send."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="email_sends"
+    )
+    date = models.DateField()
+    quote_ids = models.JSONField(default=list)
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            UniqueConstraint(fields=["user", "date"], name="unique_email_send_per_user_per_day")
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} mailed {self.date}"

@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Account · ReadReadRead{% endblock %}
+
+{% block content %}
+<div class="account-page">
+    <h1>Account</h1>
+    <p class="lede">The daily letter is Today, delivered. Same passages, same criteria.</p>
+
+    {% if messages %}
+    <ul class="flash" aria-live="polite">
+        {% for message in messages %}
+        <li class="{% if message.tags %}{{ message.tags }}{% endif %}">{{ message }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    <p class="addr">Signed in as {{ user.email }}</p>
+
+    <form method="post" class="account-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+        <p class="form-error">{{ form.non_field_errors.0 }}</p>
+        {% endif %}
+
+        <label class="check">
+            {{ form.enabled }}
+            <span>{{ form.enabled.label }}</span>
+        </label>
+        {% if form.enabled.errors %}
+        <p class="form-error">{{ form.enabled.errors.0 }}</p>
+        {% endif %}
+
+        <div class="field">
+            <label class="cap" for="{{ form.timezone.id_for_label }}">{{ form.timezone.label }}</label>
+            {{ form.timezone }}
+            {% if form.timezone.errors %}
+            <p class="form-error">{{ form.timezone.errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        <div class="field">
+            <span class="cap" id="send-time-label">Send at</span>
+            <div class="time" role="group" aria-labelledby="send-time-label">
+                <label class="sr-only" for="{{ form.send_hour.id_for_label }}">Hour</label>
+                {{ form.send_hour }}
+                <span class="colon" aria-hidden="true">:</span>
+                <label class="sr-only" for="{{ form.send_minute.id_for_label }}">Minute</label>
+                {{ form.send_minute }}
+                <span class="hint">local time</span>
+            </div>
+            {% if form.send_hour.errors %}
+            <p class="form-error">{{ form.send_hour.errors.0 }}</p>
+            {% endif %}
+            {% if form.send_minute.errors %}
+            <p class="form-error">{{ form.send_minute.errors.0 }}</p>
+            {% endif %}
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="save">Save</button>
+        </div>
+    </form>
+
+    <form method="post" class="preview-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="preview">
+        <button type="submit" class="ghost">Send a preview</button>
+    </form>
+</div>
+{% endblock %}

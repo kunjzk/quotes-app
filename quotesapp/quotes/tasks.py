@@ -1,22 +1,29 @@
-from quotes.models import User
-from celery import current_app as app
-from quotes.services import find_quotes_and_send_email
+from smtplib import SMTPException
 
-@app.task
+from celery import current_app as app
+
+from quotes.mail import find_quotes_and_send_email, users_due_for_email
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+@app.task(name="quotes.tasks.create_email_tasks")
 def create_email_tasks():
-    """
-    Create email tasks for each user in the DB.
-    Fan out the tasks to send emails to each user.
-    """
-    print("Creating email tasks")
-    for user in User.objects.all():
+    """Fan out a send task for each user whose local send time has arrived."""
+    due = users_due_for_email()
+    logger.info("Creating email tasks", extra={"due": len(due)})
+    for user in due:
         send_email_task.delay(user.id)
 
-@app.task
-def send_email_task(user_id: int):
-    """
-    Send an email to the user.
-    """
-    user = User.objects.get(id=user_id)
-    print(f"Sending email to {user.email}")
-    find_quotes_and_send_email(user_id)
+
+@app.task(
+    name="quotes.tasks.send_email_task",
+    autoretry_for=(SMTPException,),
+    retry_backoff=True,
+    retry_kwargs={"max_retries": 3},
+)
+def send_email_task(user_id: int, preview: bool = False):
+    """Send today's passages to one user."""
+    find_quotes_and_send_email(user_id, preview=preview)
